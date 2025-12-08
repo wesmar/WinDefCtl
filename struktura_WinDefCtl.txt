@@ -1,0 +1,54 @@
+ Volume in drive C is SYSTEM
+ Volume Serial Number is 0000-0002
+
+ Directory of C:\Projekty\github\WinDefCtl
+
+12/08/2025  11:48 PM    <DIR>          .
+12/08/2025  11:42 PM    <DIR>          ..
+09/23/2025  12:50 AM               254 .gitignore
+12/08/2025  11:40 PM    <DIR>          data
+09/30/2025  02:39 PM             1,849 git-push.sh
+09/23/2025  12:49 AM               463 pack-data.sh
+12/08/2025  11:15 PM             5,918 README.md
+11/30/2025  07:19 PM             1,359 release-update.sh
+12/08/2025  11:48 PM                 0 struktura_WinDefCtl.txt
+12/08/2025  11:47 PM    <DIR>          WinDefCtl
+12/08/2025  11:44 PM               174 WinDefCtl.slnx
+               7 File(s)         10,017 bytes
+
+ Directory of C:\Projekty\github\WinDefCtl\data
+
+12/08/2025  11:40 PM    <DIR>          .
+12/08/2025  11:48 PM    <DIR>          ..
+01/01/2026  12:00 AM            47,104 WinDefCtl.exe
+               1 File(s)         47,104 bytes
+
+ Directory of C:\Projekty\github\WinDefCtl\WinDefCtl
+
+12/08/2025  11:47 PM    <DIR>          .
+12/08/2025  11:48 PM    <DIR>          ..
+12/08/2025  11:19 PM             6,597 BannerUtils.cpp
+12/08/2025  10:51 PM             1,719 BannerUtils.h
+12/08/2025  11:40 PM    <DIR>          ICON
+12/08/2025  10:52 PM             2,500 main.cpp
+12/08/2025  01:28 PM               452 resource.h
+12/08/2025  10:13 PM             8,134 StealthUtils.cpp
+12/08/2025  09:16 PM               980 StealthUtils.h
+12/08/2025  10:32 PM            14,823 WinDefCtl.cpp
+12/08/2025  09:21 PM             1,570 WinDefCtl.h
+12/08/2025  11:08 PM             4,730 WinDefCtl.rc
+12/08/2025  10:54 PM             7,462 WinDefCtl.vcxproj
+12/08/2025  10:53 PM             1,582 WinDefCtl.vcxproj.filters
+12/08/2025  12:49 AM               168 WinDefCtl.vcxproj.user
+              12 File(s)         50,717 bytes
+
+ Directory of C:\Projekty\github\WinDefCtl\WinDefCtl\ICON
+
+12/08/2025  11:40 PM    <DIR>          .
+12/08/2025  11:47 PM    <DIR>          ..
+12/08/2025  11:07 PM             9,662 WinDefCtl.ico
+               1 File(s)          9,662 bytes
+
+     Total Files Listed:
+              21 File(s)        117,500 bytes
+              11 Dir(s)  928,601,829,376 bytes free
