@@ -48,7 +48,7 @@ bool WindowsDefenderAutomation::preWarmDefender() {
                   nullptr, nullptr, SW_SHOWNOACTIVATE);
     
     // Wait for window to appear (longer timeout for cold boot)
-    std::this_thread::sleep_for(1500ms);
+    std::this_thread::sleep_for(800ms);
     
     // Find the window (no cloaking needed for pre-warm)
     HWND hwnd = StealthUtils::FindSecurityWindowOnly(10);
@@ -57,7 +57,7 @@ bool WindowsDefenderAutomation::preWarmDefender() {
         LOG(L"  [*] Pre-warm window found, waiting for full initialization...\n");
         
         // Wait for window to be fully initialized (UI elements loaded)
-        std::this_thread::sleep_for(3500ms);
+        std::this_thread::sleep_for(800ms);
         
         // Bring window to foreground (critical for cold boot)
         SetForegroundWindow(hwnd);
@@ -101,17 +101,17 @@ bool WindowsDefenderAutomation::openDefenderSettings() {
     if (isColdBoot()) {
         preWarmDefender();
         // Give system a moment to settle after pre-warm
-        std::this_thread::sleep_for(1500ms);
+        std::this_thread::sleep_for(800ms);
     }
     
     // Open window in background/minimized to avoid user interference
     ShellExecuteW(nullptr, L"open", L"windowsdefender://threatsettings", nullptr, nullptr, SW_SHOWMINNOACTIVE);
     
-    // Use StealthUtils to find and hide the window (Retry 40 times * 250ms = 10 sec for slow PCs)
-    hwndSecurity = StealthUtils::FindAndCloakSecurityWindow(40);
+    // Use StealthUtils to find and hide the window (Retry 10 times * 250ms = 2,5 sec for slow PCs)
+    hwndSecurity = StealthUtils::FindAndCloakSecurityWindow(10);
 
-    // Wait for internal UI to load (100 retries * 100ms = 10 sec)
-    if (!hwndSecurity || !waitForUILoaded(100)) { 
+    // Wait for internal UI to load (50 retries * 100ms = 5 sec)
+    if (!hwndSecurity || !waitForUILoaded(50)) { 
         std::wcout << L"  [ERROR] Failed to load UI (Timeout on slow system).\n";
         return false;
     }

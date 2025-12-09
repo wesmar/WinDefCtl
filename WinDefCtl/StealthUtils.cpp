@@ -238,8 +238,8 @@ HWND StealthUtils::FindAndCloakSecurityWindow(int maxRetries) {
         }
 
         // DELAY FIX FOR SLOW HARDWARE
-        // 250ms delay gives the OS time to create the window (Battery Saving Mode/Slow CPU)
-        std::this_thread::sleep_for(250ms);
+        // 100ms delay gives the OS time to create the window (Battery Saving Mode/Slow CPU)
+        std::this_thread::sleep_for(100ms);
     }
     return NULL;
 }
@@ -254,7 +254,7 @@ HWND StealthUtils::FindSecurityWindowOnly(int maxRetries) {
             return data.hWndFound;
         }
 
-        std::this_thread::sleep_for(250ms);
+        std::this_thread::sleep_for(100ms);
     }
     return NULL;
 }
