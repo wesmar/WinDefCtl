@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="WinDefCtl.vcxproj" Id="a5f71ca7-a3aa-4e67-b6f0-154c4efee739" />
+</Solution>
