@@ -73,6 +73,25 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
 }
 
 // ============================================================================
+// EnumWindows Callback: Find only (no cloaking) for pre-warm
+// ============================================================================
+
+BOOL CALLBACK EnumWindowsProcFindOnly(HWND hwnd, LPARAM lParam) {
+    FindWindowData* data = (FindWindowData*)lParam;
+    wchar_t className[256] = { 0 };
+
+    if (GetClassNameW(hwnd, className, 256)) {
+        if (wcscmp(className, L"ApplicationFrameWindow") == 0) {
+            if (IsWindowVisible(hwnd)) {
+                data->hWndFound = hwnd;
+                return FALSE; // Stop enumeration
+            }
+        }
+    }
+    return TRUE;
+}
+
+// ============================================================================
 // Registry Helpers
 // ============================================================================
 
@@ -223,4 +242,69 @@ HWND StealthUtils::FindAndCloakSecurityWindow(int maxRetries) {
         std::this_thread::sleep_for(250ms);
     }
     return NULL;
+}
+
+HWND StealthUtils::FindSecurityWindowOnly(int maxRetries) {
+    FindWindowData data = { 0 };
+
+    for (int i = 0; i < maxRetries; ++i) {
+        EnumWindows(EnumWindowsProcFindOnly, (LPARAM)&data);
+
+        if (data.hWndFound) {
+            return data.hWndFound;
+        }
+
+        std::this_thread::sleep_for(250ms);
+    }
+    return NULL;
+}
+
+// ============================================================================
+// Volatile Registry Marker (Session Persistence)
+// ============================================================================
+
+bool StealthUtils::CheckVolatileWarmMarker() {
+    HKEY hKey;
+    LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\WinDefCtl", 0, KEY_READ, &hKey);
+    
+    if (result != ERROR_SUCCESS) {
+        return false; // Key doesn't exist = cold boot
+    }
+
+    // Check if WinDefCtl_Warmed value exists
+    DWORD value;
+    DWORD size = sizeof(DWORD);
+    result = RegQueryValueExW(hKey, L"WinDefCtl_Warmed", nullptr, nullptr, (LPBYTE)&value, &size);
+    RegCloseKey(hKey);
+    
+    return (result == ERROR_SUCCESS); // If exists = already warmed
+}
+
+bool StealthUtils::SetVolatileWarmMarker() {
+    HKEY hKey;
+    DWORD disposition;
+    
+    // Create volatile key (disappears on logout/reboot)
+    LONG result = RegCreateKeyExW(
+        HKEY_CURRENT_USER,
+        L"Software\\WinDefCtl",
+        0,
+        NULL,
+        REG_OPTION_VOLATILE, // Key disappears on logout
+        KEY_WRITE,
+        NULL,
+        &hKey,
+        &disposition
+    );
+    
+    if (result != ERROR_SUCCESS) {
+        return false;
+    }
+
+    // Set marker value
+    DWORD marker = 1;
+    result = RegSetValueExW(hKey, L"WinDefCtl_Warmed", 0, REG_DWORD, (LPBYTE)&marker, sizeof(DWORD));
+    RegCloseKey(hKey);
+    
+    return (result == ERROR_SUCCESS);
 }

@@ -14,17 +14,17 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  <ItemGroup>
     <ClCompile Include="WinDefCtl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-	<ClCompile Include="StealthUtils.cpp">
+    <ClCompile Include="StealthUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-	<ClCompile Include="BannerUtils.cpp">
+    <ClCompile Include="BannerUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,5 +38,13 @@
     <ClInclude Include="BannerUtils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="WinDefCtl.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

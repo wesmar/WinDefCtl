@@ -30,6 +30,10 @@ private:
     // expectIncrease = false (Waiting for warning content to VANISH)
     bool waitForStructureChange(int baselineCount, bool expectIncrease, int timeoutSeconds = 10);
 
+    // Cold boot detection and pre-warming
+    bool isColdBoot();       // Check if this is first run after login
+    bool preWarmDefender();  // Open and close Defender to "warm up" the system
+
 public:
     WindowsDefenderAutomation();
     ~WindowsDefenderAutomation();

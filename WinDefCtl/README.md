@@ -3,7 +3,7 @@
 **Automated Real-Time Protection and Tamper Protection Management**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2011-blue)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)]()
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
 
 ---
@@ -26,14 +26,12 @@ WinDefCtl is a command-line utility that provides automated control over Windows
 - **Tamper Protection Control** - Enable/disable/check Tamper Protection status
 - **Stealth Execution** - Invisible window management using DWM cloaking
 - **Automatic UAC Handling** - Temporary UAC suppression with automatic restoration
-- **Cold Boot Detection** - Intelligent pre-warming on first run after login
 - **Reliable Operation Confirmation** - Structural density detection for UI changes
 
 ### Technical Implementation
 - **UI Automation API** - No registry or service manipulation
 - **Multi-layer Window Hiding** - Opacity control, DWM cloaking, off-screen positioning
 - **Smart Timeout Mechanisms** - Extended wait times for slow hardware (10 seconds)
-- **Session-Aware Pre-Warming** - Volatile registry markers for optimal performance
 - **Atomic Operations** - Complete success or automatic rollback
 - **UAC Recovery System** - Automatic restoration on crash or interruption
 
@@ -71,46 +69,9 @@ WinDefCtl tp on
 WinDefCtl rtp on
 ```
 
-### First Run After Login (Cold Boot)
-
-On the first execution after user login or logout/login, WinDefCtl performs an automatic pre-warming phase:
-
-```cmd
-=== Windows Defender Tamper Protection Control ===
-  [*] Opening Windows Defender...
-  [*] Cold boot detected - pre-warming Windows Defender...
-  [*] Pre-warm window found, waiting for full initialization...
-  [*] Closing pre-warm window...
-  [*] Retry close with PostMessage...
-  [*] Pre-warm complete
-  [*] Backing up and disabling UAC prompts...
-  [*] Waiting for UI update... [OK]
-  [*] Restoring original UAC settings...
-  [*] Operation completed.
-```
-
-This is normal behavior and ensures reliable operation. Subsequent executions within the same login session will skip the pre-warm phase.
-
 ---
 
 ## ⚙️ How It Works
-
-### Cold Boot Detection & Pre-Warming
-
-**Why Pre-Warming is Necessary:**
-
-On the first launch after user login, Windows Security UI components are not loaded into memory. While the window appears visually ready, internal components (message loop, event handlers) may not be fully initialized. This causes close messages to be ignored, preventing proper automation.
-
-**Pre-Warming Solution:**
-
-1. **Session Detection** - Checks volatile registry key at `HKCU\Software\WinDefCtl\WinDefCtl_Warmed`
-2. **First-Run Detection** - If key doesn't exist, this is the first run after login (cold boot)
-3. **Component Loading** - Opens Windows Security window, waits for full initialization (~5 seconds)
-4. **Graceful Close** - Closes window using multiple strategies (WM_SYSCOMMAND, PostMessage fallback)
-5. **Session Marker** - Sets volatile registry flag (auto-deleted on logout)
-6. **Subsequent Runs** - Marker exists = components already in memory = skip pre-warm
-
-This ensures that all Windows Security components are loaded and responsive before actual automation begins.
 
 ### Stealth Window Management ("Ghost Mode")
 
@@ -151,7 +112,7 @@ Uses "Structural Density" approach for reliable operation:
 
 ## 🛠️ Technical Requirements
 
-- **OS:** Windows 11 (with modern Windows Security interface)
+- **OS:** Windows 10/11 (with modern Windows Security interface)
 - **Privileges:** Administrator rights required
 - **Dependencies:** UI Automation API, DWM API
 - **Compiler:** Visual Studio 2022 (C++20)
@@ -165,28 +126,20 @@ Uses "Structural Density" approach for reliable operation:
 - Opens `windowsdefender://threatsettings` URI
 - Window is minimized and hidden immediately (40 retries × 250ms = 10 sec timeout)
 - UI loading timeout: 100 retries × 100ms = 10 seconds
-- Cold boot detection adds ~5-7 seconds on first run after login
 - All operations are logged to console (DEBUG_LOGGING_ENABLED = 1)
 
-### Registry Keys
+### UAC Registry Keys
 
-**UAC Backup** (HKLM):
 Located at `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System`:
 - `ConsentPromptBehaviorAdmin` - UAC prompt behavior
 - `PromptOnSecureDesktop` - Secure desktop setting
 - `UACStatus` - Backup storage (custom key)
-
-**Session Marker** (HKCU):
-Located at `HKCU\Software\WinDefCtl`:
-- `WinDefCtl_Warmed` - Volatile flag (auto-deleted on logout)
-- Used for cold boot detection and pre-warm skip logic
 
 ### Limitations
 
 - Requires active user session (no headless execution)
 - Cannot run from Windows PE or Safe Mode
 - System restart may be required for some changes to take full effect
-- Pre-warming adds 5-7 seconds to first execution after login
 
 ---
 

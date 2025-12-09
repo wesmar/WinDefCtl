@@ -30,8 +30,79 @@ WindowsDefenderAutomation::~WindowsDefenderAutomation() {
     CoUninitialize();
 }
 
+// ============================================================================
+// Cold Boot Detection and Pre-Warming
+// ============================================================================
+
+bool WindowsDefenderAutomation::isColdBoot() {
+    // Check if volatile registry marker exists
+    // If it doesn't exist = this is first run after login
+    return !StealthUtils::CheckVolatileWarmMarker();
+}
+
+bool WindowsDefenderAutomation::preWarmDefender() {
+    LOG(L"  [*] Cold boot detected - pre-warming Windows Defender...\n");
+    
+    // Open Defender without automation (just to load components)
+    ShellExecuteW(nullptr, L"open", L"windowsdefender://threatsettings", 
+                  nullptr, nullptr, SW_SHOWNOACTIVATE);
+    
+    // Wait for window to appear (longer timeout for cold boot)
+    std::this_thread::sleep_for(1500ms);
+    
+    // Find the window (no cloaking needed for pre-warm)
+    HWND hwnd = StealthUtils::FindSecurityWindowOnly(10);
+    
+    if (hwnd) {
+        LOG(L"  [*] Pre-warm window found, waiting for full initialization...\n");
+        
+        // Wait for window to be fully initialized (UI elements loaded)
+        std::this_thread::sleep_for(3500ms);
+        
+        // Bring window to foreground (critical for cold boot)
+        SetForegroundWindow(hwnd);
+        std::this_thread::sleep_for(100ms);
+        
+        // Try WM_SYSCOMMAND first (more reliable than WM_CLOSE)
+        LOG(L"  [*] Closing pre-warm window...\n");
+        SendMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+        
+        // Wait and verify window closed
+        bool closed = false;
+        for (int i = 0; i < 30; i++) {
+            if (!IsWindow(hwnd) || !IsWindowVisible(hwnd)) {
+                closed = true;
+                break;
+            }
+            std::this_thread::sleep_for(100ms);
+        }
+        
+        if (!closed) {
+            // Fallback: try PostMessage async
+            LOG(L"  [*] Retry close with PostMessage...\n");
+            PostMessage(hwnd, WM_CLOSE, 0, 0);
+            std::this_thread::sleep_for(1000ms);
+        }
+        
+        // Mark as warmed for this session
+        StealthUtils::SetVolatileWarmMarker();
+        LOG(L"  [*] Pre-warm complete\n");
+        return true;
+    }
+    
+    LOG(L"  [WARN] Pre-warm window not found, continuing anyway...\n");
+    return false;
+}
+
 bool WindowsDefenderAutomation::openDefenderSettings() {
     LOG(L"\n  [*] Opening Windows Defender...\n");
+    
+    // Check if this is cold boot (first run after login)
+    if (isColdBoot()) {
+        preWarmDefender();
+        // Give system a moment to settle after pre-warm
+        std::this_thread::sleep_for(1500ms);
+    }
     
     // Open window in background/minimized to avoid user interference
     ShellExecuteW(nullptr, L"open", L"windowsdefender://threatsettings", nullptr, nullptr, SW_SHOWMINNOACTIVE);
