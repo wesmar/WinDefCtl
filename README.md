@@ -14,8 +14,8 @@ WinDefCtl is a command-line utility that provides automated control over Windows
 
 **Author:** Marek Wesołowski - WESMAR  
 **Contact:** marek@wesolowski.eu.org | +48 607-440-283  
-**Website:** https://windefctl.pl  
-**GitHub:** https://github.com/wesmar/windefctl/
+**Website:** https://kvc.pl 
+**GitHub:** https://github.com/wesmar/WinDefCtl/
 
 ---
 
@@ -203,7 +203,7 @@ Support this project:
 - **Revolut:** revolut.me/marekb92
 
 ### Source Code
-- **GitHub:** https://github.com/wesmar/windefctl/
+- **GitHub:** https://github.com/wesmar/WinDefCtl/
 
 ---
 
