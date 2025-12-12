@@ -8,6 +8,18 @@
 
 ---
 
+## 📦 Available Versions
+
+### PowerShell Script Version
+
+By popular request from the [MyDigitalLife (MDL) community](https://forums.mydigitallife.net/threads/command-line-utility-to-turn-on-off-windows-defender-and-tamper-protection.89900/), a PowerShell script version is now available: **WinDefCtl.ps1**
+
+This script version provides the same core functionality as the compiled utility, allowing users who prefer script-based solutions or need to review the source code directly to manage Windows Defender settings with full transparency.
+
+Both versions offer very similar capabilities for controlling Real-Time Protection and Tamper Protection settings.
+
+---
+
 ## 📋 Overview
 
 WinDefCtl is a command-line utility that provides automated control over Windows Defender's Real-Time Protection (RTP) and Tamper Protection settings through UI Automation API. It operates with stealth execution capabilities, making security configuration changes invisible to the user.
