@@ -1,241 +1,195 @@
-# WinDefCtl - Windows Defender Automation & Control Utility
+# WinDefCtl — Windows Defender Automation & Control Utility v2.0
 
-**Automated Real-Time Protection and Tamper Protection Management**
+**Full Defender engine kill + RTP/TP slider control via UI Automation**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2011-blue)]()
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![Build](https://img.shields.io/badge/build-Release%20x64-brightgreen)]()
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 ---
 
-## 📦 Available Versions
+## ⚡ What's New in v2.0
 
-### PowerShell Script Version
+v2.0 introduces full Defender **engine kill** without restart — no PowerShell, no WMI, no third-party tools.  
+Combines offline IFEO hive manipulation with ring-0 kernel kill via `kvckiller.sys`.
 
-By popular request from the [MyDigitalLife (MDL) community](https://forums.mydigitallife.net/threads/command-line-utility-to-turn-on-off-windows-defender-and-tamper-protection.89900/), a PowerShell script version is now available: **WinDefCtl.ps1**
-
-This script version provides the same core functionality as the compiled utility, allowing users who prefer script-based solutions or need to review the source code directly to manage Windows Defender settings with full transparency.
-
-Both versions offer very similar capabilities for controlling Real-Time Protection and Tamper Protection settings.
-
----
-
-## 📋 Overview
-
-WinDefCtl is a command-line utility that provides automated control over Windows Defender's Real-Time Protection (RTP) and Tamper Protection settings through UI Automation API. It operates with stealth execution capabilities, making security configuration changes invisible to the user.
-
-**Author:** Marek Wesołowski - WESMAR  
-**Contact:** marek@wesolowski.eu.org | +48 607-440-283  
-**Website:** https://kvc.pl 
-**GitHub:** https://github.com/wesmar/WinDefCtl/
+| Command | What it does |
+|---------|-------------|
+| `WinDefCtl kill` | IFEO block + kernel kill of `MsMpEng.exe` + `SecurityHealthSystray.exe` + SCM stop of `SecurityHealthService` |
+| `WinDefCtl restore` | Remove IFEO entries + start `WinDefend` + `SecurityHealthService` + relaunch `SecurityHealthSystray.exe` |
+| `WinDefCtl rtp off\|on\|status` | Real-Time Protection toggle via UI Automation (overlay) |
+| `WinDefCtl tp off\|on\|status` | Tamper Protection toggle via UI Automation (overlay) |
 
 ---
 
-## ✨ Key Features
+## 📥 Download
 
-### Core Capabilities
-- **Real-Time Protection Control** - Enable/disable/check RTP status
-- **Tamper Protection Control** - Enable/disable/check Tamper Protection status
-- **Stealth Execution** - Invisible window management using DWM cloaking
-- **Automatic UAC Handling** - Temporary UAC suppression with automatic restoration
-- **Cold Boot Detection** - Intelligent pre-warming on first run after login
-- **Reliable Operation Confirmation** - Structural density detection for UI changes
+**[Latest Release → v2.0.0](https://github.com/wesmar/WinDefCtl/releases/tag/v2.0.0)**
 
-### Technical Implementation
-- **UI Automation API** - No registry or service manipulation
-- **Multi-layer Window Hiding** - Opacity control, DWM cloaking, off-screen positioning
-- **Smart Timeout Mechanisms** - Extended wait times for slow hardware (10 seconds)
-- **Session-Aware Pre-Warming** - Volatile registry markers for optimal performance
-- **Atomic Operations** - Complete success or automatic rollback
-- **UAC Recovery System** - Automatic restoration on crash or interruption
+Single standalone executable — no installer, no dependencies, no runtime DLLs.  
+Run as **Administrator**.
 
 ---
 
 ## 🚀 Usage
 
-### Basic Commands
-
 ```cmd
-# Real-Time Protection
-WinDefCtl rtp status        # Check current RTP status
-WinDefCtl rtp on            # Enable Real-Time Protection
-WinDefCtl rtp off           # Disable Real-Time Protection
+WinDefCtl kill              # Kill Defender engine (no restart required)
+WinDefCtl restore           # Re-enable Defender engine
 
-# Tamper Protection
-WinDefCtl tp status         # Check current Tamper Protection status
-WinDefCtl tp on             # Enable Tamper Protection
+WinDefCtl rtp status        # Check Real-Time Protection state
+WinDefCtl rtp off           # Disable Real-Time Protection
+WinDefCtl rtp on            # Enable Real-Time Protection
+
+WinDefCtl tp status         # Check Tamper Protection state
 WinDefCtl tp off            # Disable Tamper Protection
+WinDefCtl tp on             # Enable Tamper Protection
 ```
 
-### Example Workflow
+### Typical Workflow
 
 ```cmd
-# Check current status
-WinDefCtl rtp status
-WinDefCtl tp status
+# Kill engine completely (blocks MsMpEng restart via IFEO)
+WinDefCtl kill
 
-# Disable protection for maintenance
+# ... do your thing ...
+
+# Restore everything
+WinDefCtl restore
+
+# Or: just disable RTP for a moment
 WinDefCtl rtp off
-WinDefCtl tp off
-
-# Re-enable protection after maintenance
-WinDefCtl tp on
 WinDefCtl rtp on
 ```
-
-### First Run After Login (Cold Boot)
-
-On the first execution after user login or logout/login, WinDefCtl performs an automatic pre-warming phase:
-
-```cmd
-=== Windows Defender Tamper Protection Control ===
-  [*] Opening Windows Defender...
-  [*] Cold boot detected - pre-warming Windows Defender...
-  [*] Pre-warm window found, waiting for full initialization...
-  [*] Closing pre-warm window...
-  [*] Retry close with PostMessage...
-  [*] Pre-warm complete
-  [*] Backing up and disabling UAC prompts...
-  [*] Waiting for UI update... [OK]
-  [*] Restoring original UAC settings...
-  [*] Operation completed.
-```
-
-This is normal behavior and ensures reliable operation. Subsequent executions within the same login session will skip the pre-warm phase.
 
 ---
 
 ## ⚙️ How It Works
 
-### Cold Boot Detection & Pre-Warming
+### `kill` — Engine Kill (v2.0)
 
-**Why Pre-Warming is Necessary:**
+Two-stage, no restart required:
 
-On the first launch after user login, Windows Security UI components are not loaded into memory. While the window appears visually ready, internal components (message loop, event handlers) may not be fully initialized. This causes close messages to be ignored, preventing proper automation.
+**Stage 1 — IFEO offline hive bypass:**
 
-**Pre-Warming Solution:**
+Direct registry write to `Image File Execution Options` is blocked by Tamper Protection.  
+WinDefCtl bypasses this using an offline hive cycle:
 
-1. **Session Detection** - Checks volatile registry key at `HKCU\Software\WinDefCtl\WinDefCtl_Warmed`
-2. **First-Run Detection** - If key doesn't exist, this is the first run after login (cold boot)
-3. **Component Loading** - Opens Windows Security window, waits for full initialization (~5 seconds)
-4. **Graceful Close** - Closes window using multiple strategies (WM_SYSCOMMAND, PostMessage fallback)
-5. **Session Marker** - Sets volatile registry flag (auto-deleted on logout)
-6. **Subsequent Runs** - Marker exists = components already in memory = skip pre-warm
+1. `RegSaveKeyEx` — dump live `IFEO` key to `%TEMP%\Ifeo.hiv`
+2. `RegLoadKey(HKLM, TempIFEO, Ifeo.hiv)` — mount as `HKLM\TempIFEO`
+3. Write `Debugger=systray.exe` to `TempIFEO\MsMpEng.exe` (and two secondary targets)
+4. `RegUnLoadKey(TempIFEO)` — unmount
+5. `RegRestoreKey(IFEO, Ifeo.hiv, REG_FORCE_RESTORE)` — kernel-level force-replace
 
-This ensures that all Windows Security components are loaded and responsive before actual automation begins.
+`REG_FORCE_RESTORE` operates below the Tamper Protection filter. Requires `SE_BACKUP_NAME` + `SE_RESTORE_NAME`.
 
-### Stealth Window Management ("Ghost Mode")
+**Stage 2 — Ring-0 process kill via `kvckiller.sys`:**
 
-WinDefCtl opens Windows Security interface completely invisibly using multiple techniques:
+`kvckiller.sys` carries a valid **digital signature** (service name: `wsftprm`).  
+Loads without DSE bypass, without HVCI restart, without any unsigned-driver prerequisites.
 
-1. **Opacity Hack** - Sets window alpha to 0 (invisible)
-2. **DWM Cloak** - Hides from window manager and taskbar
-3. **Logical Teleport** - Hijacks restore position to off-screen coordinates
-4. **Physical Teleport** - Moves window to (-4000, -4000) immediately
-5. **Show Without Activate** - Window remains active for automation but hidden
+- Driver extracted from embedded LZX CAB (appended to the `.ico` resource at `ICON_HEADER_SIZE` offset)
+- Written to `System32\drivers\kvckiller.sys`
+- Service registered as `wsftprm` (Microsoft validates this service name)
+- IOCTL `0x22201C` on `\\.\Warsaw_PM` → terminates `MsMpEng.exe` + `SecurityHealthSystray.exe`
+- `SecurityHealthService` stopped via SCM
+- Service cleaned up after use (stop → wait for `SERVICE_STOPPED` → delete)
 
-### UAC Manipulation
+**Smart service reuse:** if `wsftprm` already exists (e.g. from KVC installation) and points to a valid `kvckiller.sys`, the existing service is reused without overwriting.
 
-Temporarily modifies registry to suppress UAC prompts:
+### `rtp` / `tp` — UI Automation (v1 behavior, unchanged)
 
-- **Backup** - Saves original `ConsentPromptBehaviorAdmin` and `PromptOnSecureDesktop` values
-- **Disable** - Sets both values to 0 (no prompts)
-- **Restore** - Automatically restores original values after operation
-- **Recovery** - Detects incomplete operations on startup and auto-restores UAC
+Opens `windowsdefender://threatsettings` completely invisible (opacity=0, DWM cloak, off-screen position).  
+Toggles the switch via `IUIAutomationTogglePattern`.  
+During operation, a full-screen **Direct2D overlay** covers the desktop showing an animated "PLEASE WAIT" — preventing visual glitches.
 
-### UI Automation Strategy
+**Overlay technical details:**
+- `WS_EX_LAYERED | WS_EX_TOPMOST` fullscreen popup, alpha=245
+- Direct2D + DirectWrite rendering: Consolas Bold 80pt, pulsing green, CRT scanlines
+- Background thread — non-blocking, no window activation
+- Released on `Hide()` via `PostMessage(WM_CLOSE)`
 
-Uses "Structural Density" approach for reliable operation:
+### UAC Bypass
 
-1. **Element Counting** - Counts all UI elements in the window
-2. **Baseline Capture** - Records element count before toggle action
-3. **Structure Change Detection** - Waits for element count change (warning dialogs appear/disappear)
-4. **Confirmation** - Verifies stable state after change
+Before UI automation, UAC prompts are suppressed:
+- Backup `ConsentPromptBehaviorAdmin` + `PromptOnSecureDesktop` to `HKLM\...\UACStatus`
+- Set both to 0 (no prompts)
+- Automatically restored after operation (or on next run if interrupted)
 
-### Toggle Switch Detection
+### Cold Boot Pre-Warming
 
-- **First Toggle** - Real-Time Protection (top switch in UI)
-- **Last Toggle** - Tamper Protection (bottom switch in UI)
-- Uses `IUIAutomationTogglePattern` to interact with switches
-- Detects current state before toggling to avoid unnecessary actions
-
----
-
-## 🛠️ Technical Requirements
-
-- **OS:** Windows 11 (with modern Windows Security interface)
-- **Privileges:** Administrator rights required
-- **Dependencies:** UI Automation API, DWM API
-- **Compiler:** Visual Studio 2022 (C++20)
+First run after login: Windows Security components are not yet loaded in memory.  
+WinDefCtl detects this via a volatile registry marker at `HKCU\Software\WinDefCtl\WinDefCtl_Warmed`  
+and pre-loads the Security window before automation begins (~5-7 seconds, first run only).
 
 ---
 
-## ⚠️ Important Notes
+## 🛠️ Build from Source
 
-### Operation Behavior
+**Requirements:** Visual Studio 2022 (v145 toolset), Windows SDK 10.0+
 
-- Opens `windowsdefender://threatsettings` URI
-- Window is minimized and hidden immediately (40 retries × 250ms = 10 sec timeout)
-- UI loading timeout: 100 retries × 100ms = 10 seconds
-- Cold boot detection adds ~5-7 seconds on first run after login
-- All operations are logged to console (DEBUG_LOGGING_ENABLED = 1)
+```powershell
+# Full chain: embed driver → compile → stamp timestamps → clean artifacts
+.\build.ps1
 
-### Registry Keys
+# Skip driver embedding (use existing ICON\WinDefCtl.ico)
+.\build.ps1 -SkipDriverPack
 
-**UAC Backup** (HKLM):
-Located at `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System`:
-- `ConsentPromptBehaviorAdmin` - UAC prompt behavior
-- `PromptOnSecureDesktop` - Secure desktop setting
-- `UACStatus` - Backup storage (custom key)
+# Custom timestamp (for reproducible builds)
+.\build.ps1 -Timestamp "2030-01-01 00:00:00"
+```
 
-**Session Marker** (HKCU):
-Located at `HKCU\Software\WinDefCtl`:
-- `WinDefCtl_Warmed` - Volatile flag (auto-deleted on logout)
-- Used for cold boot detection and pre-warm skip logic
+**Build chain:**
+1. `Build-DriverIcon` — `makecab` LZX compresses `IcoBuilder\kvckiller.sys`, appends CAB to `IcoBuilder\WinDefCtl.ico` → `ICON\WinDefCtl.ico`
+2. Regenerates `src\GenIconSize.h` with exact icon header byte count
+3. MSBuild `Release|x64`: `/MT` (static CRT), LTCG, no PDB
+4. Timestamp stamp → `bin\WinDefCtl.exe`
+5. Cleans `obj\`
 
-### Limitations
-
-- Requires active user session (no headless execution)
-- Cannot run from Windows PE or Safe Mode
-- System restart may be required for some changes to take full effect
-- Pre-warming adds 5-7 seconds to first execution after login
+**Output:** `bin\WinDefCtl.exe` (~380 KB, no external dependencies)
 
 ---
 
-## 📞 Support & Contribution
+## 📋 Technical Requirements
 
-### Professional Services
-For custom modifications, enterprise support, or security consulting:
-- **Email:** marek@wesolowski.eu.org
-- **Phone:** +48 607-440-283
-
-### Donations
-Support this project:
-- **PayPal:** paypal.me/ext1
-- **Revolut:** revolut.me/marekb92
-
-### Source Code
-- **GitHub:** https://github.com/wesmar/WinDefCtl/
+- **OS:** Windows 11 (tested on 24H2 / 26H1)
+- **Privileges:** Administrator
+- **Architecture:** x64
+- **Dependencies:** none (static CRT, inbox D2D1/DWrite via system DLLs)
 
 ---
 
-## 📄 License
+## ⚠️ Notes
 
-This project is released under the MIT License. See LICENSE file for details.
-
----
-
-## ⚖️ Legal & Ethical Notice
-
-**Intended for authorized security testing and system administration only.**
-
-- User assumes full legal responsibility for all actions performed
-- Ensure proper authorization before using on any system
-- This tool modifies system security settings - use responsibly
-- Misuse may violate computer crime laws in your jurisdiction
-
-**By using this tool, you acknowledge understanding and accept full responsibility.**
+- `kill` does NOT unload `WinDefend` service — IFEO prevents `MsMpEng.exe` from starting on service start
+- `restore` removes the IFEO block then starts `WinDefend` + `SecurityHealthService`
+- UI Automation (`rtp`/`tp`) requires an active user session
+- Cannot run from Safe Mode or Windows PE
+- kvckiller.sys is digitally signed — no HVCI workaround needed
 
 ---
 
-**Copyright © 2025 Marek Wesołowski - WESMAR. All rights reserved.**
+## 📞 Contact & Support
+
+| | |
+|-|-|
+| **Email** | marek@wesolowski.eu.org |
+| **Phone** | +48 607-440-283 |
+| **Website** | https://kvc.pl |
+| **GitHub** | https://github.com/wesmar/WinDefCtl |
+
+**Donations:**
+- PayPal: paypal.me/ext1
+- Revolut: revolut.me/marekb92
+
+---
+
+## ⚖️ Legal Notice
+
+For **authorized security testing and system administration only**.  
+User assumes full legal responsibility for all actions performed.  
+Misuse may violate computer crime laws in your jurisdiction.
+
+---
+
+*© 2026 Marek Wesołowski — WESMAR*

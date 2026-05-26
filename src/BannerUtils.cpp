@@ -61,10 +61,10 @@ void BannerUtils::ShowBanner() noexcept
     std::wcout << L"\n" << BORDER_DOUBLE << L"\n";
 
     PrintCentered(L"Marek Wesolowski - WESMAR - 2025", hConsole, Colors::WHITE_BRIGHT);
-    PrintCentered(L"WinDefCtl v1.0.0 https://kvc.pl", hConsole, Colors::WHITE_BRIGHT);
+    PrintCentered(L"WinDefCtl v2.0.0 https://kvc.pl", hConsole, Colors::WHITE_BRIGHT);
     PrintCentered(L"+48 607-440-283, marek@wesolowski.eu.org", hConsole, Colors::WHITE_BRIGHT);
     PrintCentered(L"WinDefCtl - Windows Defender Automation & Control Utility", hConsole, Colors::WHITE_BRIGHT);
-    PrintCentered(L"Automated Real-Time Protection and Tamper Protection Management", hConsole, Colors::WHITE_BRIGHT);
+    PrintCentered(L"RTP/TP slider control + full engine kill via IFEO+kvckiller", hConsole, Colors::WHITE_BRIGHT);
 
     SetConsoleTextAttribute(hConsole, Colors::BLUE_BRIGHT);
     std::wcout << BORDER_DOUBLE << L"\n";
@@ -79,11 +79,9 @@ void BannerUtils::PrintFooter() noexcept
     GetConsoleScreenBufferInfo(hConsole, &csbi);
     WORD originalColor = csbi.wAttributes;
 
-    // Top border
     SetConsoleTextAttribute(hConsole, Colors::BLUE_BRIGHT);
     std::wcout << L"\n" << BORDER_SINGLE << L"\n";
 
-    // Footer content lines
     PrintBoxLine(L"Support this project - a small donation is greatly appreciated", 
                  hConsole, Colors::BLUE_BRIGHT, Colors::WHITE_BRIGHT);
     PrintBoxLine(L"and helps sustain private research builds.", 
@@ -93,7 +91,6 @@ void BannerUtils::PrintFooter() noexcept
     PrintBoxLine(L"Professional services: marek@wesolowski.eu.org", 
                  hConsole, Colors::BLUE_BRIGHT, Colors::WHITE_BRIGHT);
 
-    // Donation line with colored links
     SetConsoleTextAttribute(hConsole, Colors::BLUE_BRIGHT);
     std::wcout << L"|";
     
@@ -123,7 +120,6 @@ void BannerUtils::PrintFooter() noexcept
     SetConsoleTextAttribute(hConsole, Colors::BLUE_BRIGHT);
     std::wcout << L"|\n";
 
-    // Bottom border
     std::wcout << BORDER_SINGLE << L"\n\n";
 
     SetConsoleTextAttribute(hConsole, originalColor);
@@ -134,26 +130,28 @@ void BannerUtils::ShowUsage() noexcept
     ShowBanner();
     
     std::wcout << L"Usage: WinDefCtl <command> [arguments]\n\n";
-    
-    // Real-Time Protection commands
-    PrintSectionHeader(L"Real-Time Protection Control");
+
+    PrintSectionHeader(L"Engine Kill (IFEO + kvckiller.sys)");
+    PrintCommandLine(L"kill",    L"Terminate Defender engine (IFEO block + kernel kill)");
+    PrintCommandLine(L"restore", L"Re-enable Defender (remove IFEO, start services)");
+    std::wcout << L"\n";
+
+    PrintSectionHeader(L"Real-Time Protection (UI automation + overlay)");
     PrintCommandLine(L"rtp status", L"Check current RTP status");
-    PrintCommandLine(L"rtp on", L"Enable Real-Time Protection");
-    PrintCommandLine(L"rtp off", L"Disable Real-Time Protection");
+    PrintCommandLine(L"rtp on",     L"Enable Real-Time Protection");
+    PrintCommandLine(L"rtp off",    L"Disable Real-Time Protection");
     std::wcout << L"\n";
-    
-    // Tamper Protection commands
-    PrintSectionHeader(L"Tamper Protection Control");
+
+    PrintSectionHeader(L"Tamper Protection (UI automation + overlay)");
     PrintCommandLine(L"tp status", L"Check current Tamper Protection status");
-    PrintCommandLine(L"tp on", L"Enable Tamper Protection");
-    PrintCommandLine(L"tp off", L"Disable Tamper Protection");
+    PrintCommandLine(L"tp on",     L"Enable Tamper Protection");
+    PrintCommandLine(L"tp off",    L"Disable Tamper Protection");
     std::wcout << L"\n";
-    
-    // Usage examples
+
     PrintSectionHeader(L"Usage Examples");
-    std::wcout << L"  WinDefCtl rtp status                  # Check if RTP is enabled\n";
+    std::wcout << L"  WinDefCtl kill                        # Kill Defender engine completely\n";
+    std::wcout << L"  WinDefCtl restore                     # Restore Defender\n";
     std::wcout << L"  WinDefCtl rtp off                     # Disable Real-Time Protection\n";
-    std::wcout << L"  WinDefCtl rtp on                      # Re-enable Real-Time Protection\n";
     std::wcout << L"  WinDefCtl tp off                      # Disable Tamper Protection\n";
     std::wcout << L"  WinDefCtl tp on                       # Re-enable Tamper Protection\n";
     

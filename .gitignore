@@ -1,8 +1,8 @@
-# Skrypty lokalne
+# Skrypty lokalne (nie commitowane)
 git-push.sh
-pack-release.sh
 pack-data.sh
 release-update.sh
+release-now.sh
 
 # Pliki środowiskowe
 .env

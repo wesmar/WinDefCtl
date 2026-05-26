@@ -3,15 +3,14 @@
 #include <windows.h>
 #include <UIAutomation.h>
 #include <string>
-#include <vector>
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "oleaut32.lib")
 
 #define DEBUG_LOGGING_ENABLED 1
 
-// Automates Windows Security interface for Real-Time Protection
-// Uses "Structural Density" strategy for robust detection
+// Automates Windows Security interface for Real-Time Protection and Tamper Protection
+// Uses UI Automation API with TOPMOST console window as visual shield
 class WindowsDefenderAutomation {
 private:
     IUIAutomation* pAutomation = nullptr;
@@ -21,18 +20,19 @@ private:
     bool waitForUILoaded(int maxRetries = 20);
     IUIAutomationElement* findFirstToggleSwitch();
     IUIAutomationElement* findLastToggleSwitch();
-
-    // Helper: Counts ALL descendant elements in the window (Text, Buttons, Groups, etc.)
+    
+    // Counts all descendant elements for structure change detection
     int countTotalElements();
-
-    // Helper: Waits until the element count changes relative to baseline
-    // expectIncrease = true (Waiting for warning content to APPEAR)
-    // expectIncrease = false (Waiting for warning content to VANISH)
+    
+    // Waits for UI element count to change (dialogs appearing/disappearing)
     bool waitForStructureChange(int baselineCount, bool expectIncrease, int timeoutSeconds = 10);
 
-    // Cold boot detection and pre-warming
-    bool isColdBoot();       // Check if this is first run after login
-    bool preWarmDefender();  // Open and close Defender to "warm up" the system
+    // Cold boot handling - first run after login needs extra initialization
+    bool isColdBoot();
+    bool preWarmDefender();
+    
+    // Find the Windows Security window handle
+    HWND findSecurityWindow(int maxRetries = 10);
 
 public:
     WindowsDefenderAutomation();
