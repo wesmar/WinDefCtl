@@ -14,6 +14,7 @@ releases/
 *.zip
 *.dat
 *.tar.gz
+release-now.md
 
 # Binarki i build
 bin/
