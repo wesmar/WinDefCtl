@@ -99,13 +99,13 @@ Loads without DSE bypass, without HVCI restart, without any unsigned-driver prer
 
 ### `rtp` / `tp` — UI Automation (v1 behavior, unchanged)
 
-Opens `windowsdefender://threatsettings` completely invisible (opacity=0, DWM cloak, off-screen position).  
-Toggles the switch via `IUIAutomationTogglePattern`.  
-During operation, a full-screen **Direct2D overlay** covers the desktop showing an animated "PLEASE WAIT" — preventing visual glitches.
+Opens `windowsdefender://threatsettings` with `SW_SHOWMINNOACTIVE` (minimized, not activated).  
+Full-screen **Direct2D overlay** covers the desktop immediately — hiding the minimized window from view.  
+Toggles the switch via `IUIAutomationTogglePattern`.
 
 **Overlay technical details:**
-- `WS_EX_LAYERED | WS_EX_TOPMOST` fullscreen popup, alpha=245
-- Direct2D + DirectWrite rendering: Consolas Bold 80pt, pulsing green, CRT scanlines
+- `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` fullscreen popup, fully opaque black
+- Direct2D + DirectWrite rendering: Consolas Bold 80pt, pulsing green, animated dots, CRT scanlines
 - Background thread — non-blocking, no window activation
 - Released on `Hide()` via `PostMessage(WM_CLOSE)`
 

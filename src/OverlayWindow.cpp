@@ -166,13 +166,12 @@ static DWORD WINAPI OverlayThread(LPVOID) noexcept
     const int sh = GetSystemMetrics(SM_CYSCREEN);
 
     HWND hwnd = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         L"WDCOverlay", nullptr, WS_POPUP,
         0, 0, sw, sh, nullptr, nullptr, hInst, nullptr);
 
     if (!hwnd) { SetEvent(g_ready); return 1; }
 
-    SetLayeredWindowAttributes(hwnd, 0, 245, LWA_ALPHA);
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

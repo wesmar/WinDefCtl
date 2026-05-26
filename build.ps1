@@ -214,7 +214,7 @@ $fixedTsStr = $fixedTs.ToString('yyyy-MM-dd HH:mm:ss',
 $epoch      = [DateTimeOffset]::new($fixedTs).ToUnixTimeSeconds()
 $env:SOURCE_DATE_EPOCH = [string]$epoch
 
-Write-Banner "$ProjectName v2.0 — full build chain"
+Write-Banner "$ProjectName v2.0 - full build chain"
 Write-Step "Configuration : $Configuration | $Platform"
 Write-Step "Timestamp     : $fixedTsStr (epoch $epoch)"
 
@@ -325,7 +325,7 @@ $elapsed = (Get-Date) - $startTime
 Write-Host ''
 if ($ok) {
     $exePath = Join-Path $BinDir "$ProjectName.exe"
-    Write-Host ('  BUILD OK  {0:F2}s  →  {1}' -f $elapsed.TotalSeconds, $exePath) `
+    Write-Host ("  BUILD OK  {0:F2}s  ->  {1}" -f $elapsed.TotalSeconds, $exePath) `
         -ForegroundColor Green
     if (Test-Path -LiteralPath $exePath) {
         $sz = (Get-Item $exePath).Length

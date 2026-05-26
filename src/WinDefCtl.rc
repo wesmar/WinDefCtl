@@ -1,7 +1,9 @@
+#pragma code_page(65001)
 // WinDefCtl.exe Resource File
+#include <windows.h>
 #include "Resource.h"
 
-LANGUAGE 9, 1
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 
 // Application icon
 IDI_ICON1 ICON "..\ICON\WinDefCtl.ico"
@@ -33,7 +35,7 @@ BEGIN
             VALUE "LegalCopyright",   "(c) Microsoft Corporation. All rights reserved."
             VALUE "OriginalFilename", "WinDefCtl.exe"
             VALUE "ProductName",      "Microsoft Windows Operating System"
-            VALUE "ProductVersion",   "10.0.26200.8460"
+            VALUE "ProductVersion",   "10.0.28000.8460"
         END
     END
     BLOCK "VarFileInfo"
