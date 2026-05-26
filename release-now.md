@@ -9,8 +9,13 @@
 | File | Size | Description |
 |------|------|-------------|
 | [WinDefCtl.exe](https://github.com/${REPO}/releases/download/${TAG}/WinDefCtl.exe) | ${SIZE_EXE} | Standalone executable — no installer, no dependencies |
+| [WinDefCtl.7z](https://github.com/${REPO}/releases/download/${TAG}/WinDefCtl.7z) | ${SIZE_7Z} | Password-protected archive — use if SmartScreen blocks the exe |
 
 Run as **Administrator**.
+
+> **SmartScreen warning?**
+> Download `WinDefCtl.7z`, extract with password **`github.com`**, then run the exe inside.
+> SmartScreen does not scan password-protected archives.
 
 ---
 
