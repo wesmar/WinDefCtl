@@ -289,7 +289,6 @@ bool WindowsDefenderAutomation::waitForStructureChange(int baselineCount, bool e
 void WindowsDefenderAutomation::closeSecurityWindow() {
     if (hwndSecurity) SendMessage(hwndSecurity, WM_CLOSE, 0, 0);
     OverlayWindow::Hide();
-    BannerUtils::ShowBanner();
     std::wcout << L"\n  [*] Operation finished.\n";
 }
 
