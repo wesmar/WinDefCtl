@@ -20,6 +20,10 @@ Combines offline IFEO hive manipulation with ring-0 kernel kill via `kvckiller.s
 | `WinDefCtl rtp off\|on\|status` | Real-Time Protection toggle via UI Automation (overlay) |
 | `WinDefCtl tp off\|on\|status` | Tamper Protection toggle via UI Automation (overlay) |
 
+> **Bonus:** v2.0 ships an **optional PowerShell script edition** — same command palette
+> in a single self-contained `.ps1` (~65 KB) with the signed Topaz driver embedded as
+> base64 LZX CAB. See [PowerShell Edition](#-powershell-edition-addon) below.
+
 ---
 
 ## 📥 Download
@@ -28,6 +32,8 @@ Combines offline IFEO hive manipulation with ring-0 kernel kill via `kvckiller.s
 
 Single standalone executable — no installer, no dependencies, no runtime DLLs.  
 Run as **Administrator**.
+
+PowerShell edition: [`data/WinDefCtl-v2.ps1`](data/WinDefCtl-v2.ps1) (~65 KB, no compiler needed).
 
 ---
 
@@ -121,6 +127,67 @@ Before UI automation, UAC prompts are suppressed:
 First run after login: Windows Security components are not yet loaded in memory.  
 WinDefCtl detects this via a volatile registry marker at `HKCU\Software\WinDefCtl\WinDefCtl_Warmed`  
 and pre-loads the Security window before automation begins (~5-7 seconds, first run only).
+
+---
+
+## 📜 PowerShell Edition (Addon)
+
+[`data/WinDefCtl-v2.ps1`](data/WinDefCtl-v2.ps1) — same command palette as the C++ binary,
+in a single self-contained PowerShell script (~65 KB). No compiler, no Visual Studio.
+Drop the file anywhere, run from elevated PowerShell.
+
+```powershell
+.\WinDefCtl-v2.ps1                  # show help (also: /?, -?, -h, --help, "help")
+.\WinDefCtl-v2.ps1 status           # read Defender state (read-only)
+.\WinDefCtl-v2.ps1 kill             # IFEO block + BYOVD kernel kill
+.\WinDefCtl-v2.ps1 restore          # remove IFEO + start WinDefend
+.\WinDefCtl-v2.ps1 rtp off          # Real-Time Protection toggle off
+.\WinDefCtl-v2.ps1 tp  on           # Tamper Protection toggle on
+```
+
+### How it works
+
+| Layer | Implementation |
+|-------|---------------|
+| Driver embedding | `kvckiller.sys` packed with `makecab.exe` (LZX) → base64-chunked → inline in `$DriverCabB64` |
+| Driver deployment | `expand.exe` decompresses CAB directly to `%SystemRoot%\System32\drivers\kvckiller.sys` |
+| SCM lifecycle | `sc.exe create wsftprm type= kernel start= demand` → `sc.exe start` → `sc.exe stop`/`delete` |
+| Kernel kill | P/Invoke `CreateFileW(\\.\Warsaw_PM)` + `DeviceIoControl(0x22201C, <PID buffer>)` |
+| IFEO bypass | `reg.exe save` → `reg.exe load HKLM\TempIFEO` → `reg.exe add Debugger=systray.exe` → `reg.exe unload` → `reg.exe restore /f` (`REG_FORCE_RESTORE`) |
+| UI automation | `System.Windows.Automation` — `TogglePattern` on Real-Time / Tamper / Dev Drive protection toggles |
+| UAC bypass | Both `ConsentPromptBehaviorAdmin` and `PromptOnSecureDesktop` packed into a single `UACStatus` DWORD, restored after the toggle |
+| Overlay | Fullscreen multi-monitor `System.Windows.Forms.Form`, pulsing "PLEASE WAIT" label (sine-wave grey-to-white, 25 FPS) |
+| Cold boot detect | Volatile marker `HKCU\Software\Temp\WinDefCtl_Warmed` |
+
+### Zero trace after `kill`
+
+After the kill flow finishes, all of the following are gone:
+
+- `wsftprm` service (stopped + `DeleteService`)
+- `%SystemRoot%\System32\drivers\kvckiller.sys` (deleted)
+- `%TEMP%\kk.cab` and `%TEMP%\Ifeo.hiv*` (deleted)
+
+Only IFEO entries remain (intentional — that **is** the active block; `restore` clears them).
+
+### Build the script
+
+```powershell
+# Source driver: data\kvckiller.sys
+.\generator\build-ps.ps1
+# Output: out\WinDefCtl-v2.ps1
+```
+
+The generator runs `makecab.exe`, base64-encodes the CAB into 76-char lines and
+substitutes into `generator\template.ps1`. No external NuGet packages, no .NET
+build tools — pure inbox Windows.
+
+### Limits vs. C++ binary
+
+- Slower startup (~1.5 s PowerShell + .NET cold load vs. ~200 ms native exe).
+- Requires `-ExecutionPolicy Bypass` or a signed copy.
+- Defender RTP **may** flag the script on disk (CAB-encoded signed driver inside a PS1).
+  The compiled C++ binary embeds the same driver as an ICO resource so it sits below most heuristics.
+- No D2D overlay — uses WinForms.
 
 ---
 
