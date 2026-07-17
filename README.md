@@ -35,12 +35,13 @@ Run as **Administrator**.
 
 PowerShell edition: [`data/WinDefCtl-v2.ps1`](data/WinDefCtl-v2.ps1) (~65 KB, no compiler needed).
 
-### Spoiler: ARM64 edition (v1.1.2)
+<details>
+<summary>🔍 Spoiler: ARM64 edition (v1.1.2) — byproduct of the research</summary>
 
-> This build was never officially announced — it is a direct byproduct of the
-> [Analyze Defender](https://kvc.pl/research/analyze-defender) research into hooking
-> the SecHealthUI XAML tree. While implementing and verifying the injection technique
-> on an ARM64 machine, a fully functional native binary emerged as a side effect.
+This build was never officially announced — it is a direct byproduct of the
+[Analyze Defender](https://kvc.pl/research/analyze-defender) research into hooking
+the SecHealthUI XAML tree. While implementing and verifying the injection technique
+on an ARM64 machine, a fully functional native binary emerged as a side effect.
 
 `WinDefCtl_arm64.exe` is attached to the release for anyone who needs it.
 It covers all five Threat Settings sliders individually — something the x64 v2.0
@@ -57,6 +58,8 @@ WinDefCtl ddp on|off   # Dev Drive protection
 The payload must be compiled natively for ARM64 — it is injected into `SecHealthUI.exe`
 which on ARM64 hardware is a native ARM64 process and cannot host x86-64 code.
 Source code is not published for this build.
+
+</details>
 
 ---
 
