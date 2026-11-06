@@ -262,7 +262,7 @@ build tools — pure inbox Windows.
 
 ## 📋 Technical Requirements
 
-- **OS:** Windows 11 (tested on 24H2 / 26H1)
+- **OS:** Windows 11 (tested on 24H2 / 26H1 / 26H2)
 - **Privileges:** Administrator
 - **Architecture:** x64
 - **Dependencies:** none (Zero-CRT, 100% native Win32/NT APIs)
