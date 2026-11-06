@@ -1,10 +1,9 @@
 #include "OverlayWindow.h"
+#include "StrUtils.h"
 
 #include <windows.h>
 #include <d2d1.h>
 #include <dwrite.h>
-#include <cmath>
-#include <cstdio>
 
 // ============================================================================
 // D2D / DWrite state — all accessed on the overlay thread only
@@ -67,9 +66,14 @@ static void RenderFrame(HWND hwnd) noexcept
     static const wchar_t* kDots[] = { L"", L".", L"..", L"..." };
     const int dotIdx = (g_tick / 4) % 4;
 
-    // Green pulse: full sine cycle every 40 ticks × 150 ms ≈ 6 s
-    const float phase  = static_cast<float>(g_tick % 40) / 40.f;
-    const float bright = 0.50f + 0.50f * sinf(phase * 6.28318f);
+    // Green pulse: full sine cycle every 40 ticks × 150 ms ≈ 6 s (precalculated 40-step table)
+    static const float kPulseTable[40] = {
+        0.5000f, 0.5782f, 0.6545f, 0.7270f, 0.7939f, 0.8536f, 0.9045f, 0.9455f, 0.9755f, 0.9938f,
+        1.0000f, 0.9938f, 0.9755f, 0.9455f, 0.9045f, 0.8536f, 0.7939f, 0.7270f, 0.6545f, 0.5782f,
+        0.5000f, 0.4218f, 0.3455f, 0.2730f, 0.2061f, 0.1464f, 0.0955f, 0.0545f, 0.0245f, 0.0062f,
+        0.0000f, 0.0062f, 0.0245f, 0.0545f, 0.0955f, 0.1464f, 0.2061f, 0.2730f, 0.3455f, 0.4218f
+    };
+    const float bright = kPulseTable[g_tick % 40];
 
     const D2D1_SIZE_F sz = g_rt->GetSize();
 
@@ -79,7 +83,8 @@ static void RenderFrame(HWND hwnd) noexcept
     g_textBrush->SetColor(D2D1::ColorF(0.f, bright * 0.90f, bright * 0.20f));
 
     wchar_t buf[32];
-    swprintf_s(buf, L"PLEASE WAIT%s", kDots[dotIdx]);
+    StrUtils::StrCopy(buf, 32, L"PLEASE WAIT");
+    StrUtils::StrConcat(buf, 32, kDots[dotIdx]);
 
     g_rt->DrawText(buf, static_cast<UINT32>(wcslen(buf)), g_textFmt,
                    D2D1::RectF(0.f, 0.f, sz.width, sz.height), g_textBrush);
@@ -118,6 +123,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             g_rt->Resize(D2D1::SizeU(LOWORD(lp), HIWORD(lp)));
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
+
+    case WM_SETCURSOR:
+        SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+        return TRUE;
 
     case WM_CLOSE:
     case WM_DESTROY:
@@ -158,6 +167,7 @@ static DWORD WINAPI OverlayThread(LPVOID) noexcept
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInst;
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wc.lpszClassName = L"WDCOverlay";
     RegisterClassExW(&wc);
@@ -176,6 +186,9 @@ static DWORD WINAPI OverlayThread(LPVOID) noexcept
     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     SetTimer(hwnd, 1, 150, nullptr);
+
+    // Report input idle immediately to eliminate Windows wait cursor (IDC_WAIT / IDC_APPSTARTING)
+    MsgWaitForMultipleObjects(0, nullptr, FALSE, 0, QS_ALLINPUT);
 
     g_hwnd = hwnd;
     SetEvent(g_ready);

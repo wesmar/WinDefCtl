@@ -23,6 +23,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -36,16 +37,23 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsErrors>true</TreatWarningAsErrors>
+      <Optimization>MinSpace</Optimization>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>false</SDLCheck>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_HAS_EXCEPTIONS=0;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <DisableSpecificWarnings>4091;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalOptions>/UTF-8 /FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/UTF-8 /FS /Gy /Gw /Gs1048576 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -53,13 +61,26 @@
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <UACUIAccess>false</UACUIAccess>
       <ManifestFile>WinDefCtl.manifest</ManifestFile>
-      <AdditionalDependencies>Cabinet.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <AdditionalDependencies>kernel32.lib;user32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;Cabinet.lib;ntdll.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapFileName>$(OutDir)$(TargetName).map</MapFileName>
       <AdditionalOptions>/BREPRO %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <MASM>
+      <WarningLevel>0</WarningLevel>
+    </MASM>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="BannerUtils.cpp" />
+    <ClCompile Include="Console.cpp" />
+    <ClCompile Include="RuntimeSupport.cpp">
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
     <ClCompile Include="StealthUtils.cpp" />
     <ClCompile Include="WinDefCtl.cpp" />
     <ClCompile Include="DefenderManager.cpp" />
@@ -69,6 +90,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BannerUtils.h" />
+    <ClInclude Include="Console.h" />
+    <ClInclude Include="ComPtr.h" />
+    <ClInclude Include="HeapArray.h" />
+    <ClInclude Include="Opt.h" />
+    <ClInclude Include="RuntimeSupport.h" />
+    <ClInclude Include="StrUtils.h" />
     <ClInclude Include="StealthUtils.h" />
     <ClInclude Include="WinDefCtl.h" />
     <ClInclude Include="Resource.h" />
@@ -81,7 +108,12 @@
   <ItemGroup>
     <ResourceCompile Include="WinDefCtl.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <MASM Include="wdc1.asm" />
+    <MASM Include="wdc2.asm" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
 </Project>

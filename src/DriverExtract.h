@@ -1,8 +1,13 @@
 #pragma once
 
-// Extract kvckiller.sys from embedded RCDATA resource (icon+CAB payload)
-// to %SystemRoot%\System32\drivers\kvckiller.sys
-bool ExtractKillerDriver() noexcept;
+#include <windows.h>
 
-// Returns path to extracted driver
-const wchar_t* GetKillerDriverPath() noexcept;
+struct ExtractedDrivers {
+    wchar_t drv1Path[MAX_PATH];
+    wchar_t drv2Path[MAX_PATH];
+    bool    drv1Ok;
+    bool    drv2Ok;
+};
+
+bool ExtractDrivers(ExtractedDrivers& out) noexcept;
+void CleanupExtractedDrivers(const ExtractedDrivers& drivers) noexcept;

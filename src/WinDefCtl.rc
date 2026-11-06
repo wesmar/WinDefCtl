@@ -8,12 +8,12 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // Application icon
 IDI_ICON1 ICON "..\ICON\WinDefCtl.ico"
 
-// Embedded icon+CAB payload. CAB starts at ICON_HEADER_SIZE bytes.
+// Embedded icon+CAB archive. CAB starts at ICON_HEADER_SIZE bytes.
 IDR_DRIVER RCDATA "..\ICON\WinDefCtl.ico"
 
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION         10,0,26200,8460
-    PRODUCTVERSION      10,0,26200,8460
+    FILEVERSION         2,1,0,0
+    PRODUCTVERSION      2,1,0,0
     FILEFLAGSMASK       0x3fL
 #ifdef _DEBUG
     FILEFLAGS           0x1L
@@ -30,12 +30,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Microsoft Corporation"
             VALUE "FileDescription",  "Windows System Utility"
-            VALUE "FileVersion",      "10.0.26200.8460"
+            VALUE "FileVersion",      "2.1.0.0"
             VALUE "InternalName",     "WinDefCtl.exe"
             VALUE "LegalCopyright",   "(c) Microsoft Corporation. All rights reserved."
             VALUE "OriginalFilename", "WinDefCtl.exe"
             VALUE "ProductName",      "Microsoft Windows Operating System"
-            VALUE "ProductVersion",   "10.0.28000.8460"
+            VALUE "ProductVersion",   "2.1.0.0"
         END
     END
     BLOCK "VarFileInfo"

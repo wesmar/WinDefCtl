@@ -36,6 +36,12 @@
     <Filter Include="Header Files\Generated">
       <UniqueIdentifier>{D1E2F3A4-B5C6-4D7E-8F9A-0B1C2D3E4F5A}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Core">
+      <UniqueIdentifier>{A1B2C3D4-E5F6-4A5B-8C7D-9E0F1A2B3C4D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Core">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-4B6C-9D8E-0F1A2B3C4D5E}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx</Extensions>
@@ -62,6 +68,12 @@
     </ClCompile>
     <ClCompile Include="DriverExtract.cpp">
       <Filter>Source Files\Driver</Filter>
+    </ClCompile>
+    <ClCompile Include="Console.cpp">
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="RuntimeSupport.cpp">
+      <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="OverlayWindow.cpp">
       <Filter>Source Files\Overlay</Filter>
@@ -92,6 +104,24 @@
     <ClInclude Include="DriverExtract.h">
       <Filter>Header Files\Driver</Filter>
     </ClInclude>
+    <ClInclude Include="Console.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="RuntimeSupport.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="StrUtils.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="ComPtr.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="HeapArray.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Opt.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
     <ClInclude Include="OverlayWindow.h">
       <Filter>Header Files\Overlay</Filter>
     </ClInclude>
@@ -100,5 +130,13 @@
     <ResourceCompile Include="WinDefCtl.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="wdc1.asm">
+      <Filter>Source Files\Core</Filter>
+    </MASM>
+    <MASM Include="wdc2.asm">
+      <Filter>Source Files\Core</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

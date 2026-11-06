@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DriverExtract.h"
+
 namespace KillerEngine {
-    bool KillDefender(const wchar_t* killerSysPath) noexcept;
+    bool KillDefender(const ExtractedDrivers& drivers) noexcept;
 }

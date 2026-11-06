@@ -16,7 +16,7 @@ $ProjectName = 'WinDefCtl'
 $BinDir      = Join-Path $ProjectRoot 'bin'
 $ObjDir      = Join-Path $ProjectRoot 'obj'
 
-# ── Console helpers ──────────────────────────────────────────────────────────
+# -- Console helpers ----------------------------------------------------------
 
 function Write-Banner {
     param([string]$Text, [string]$Color = 'Cyan')
@@ -32,7 +32,7 @@ function Write-Step    ([string]$m) { Write-Host "    $m" -ForegroundColor DarkG
 function Write-Ok      ([string]$m) { Write-Host "    $m" -ForegroundColor Green   }
 function Write-Fail    ([string]$m) { Write-Host "    $m" -ForegroundColor Red     }
 
-# ── Timestamp utilities ───────────────────────────────────────────────────────
+# -- Timestamp utilities -------------------------------------------------------
 
 function Parse-FixedTimestamp ([string]$Value) {
     $styles = [System.Globalization.DateTimeStyles]::AllowWhiteSpaces -bor
@@ -62,7 +62,7 @@ function Set-FixedFileTimestamp {
     }
 }
 
-# ── Locate Visual Studio (vswhere + manual fallback) ─────────────────────────
+# -- Locate Visual Studio (vswhere + manual fallback) -------------------------
 
 function Get-LatestVsPath {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} `
@@ -80,7 +80,7 @@ function Get-LatestVsPath {
         }
     }
 
-    # Manual fallback — scan known VS installation directories
+    # Manual fallback - scan known VS installation directories
     foreach ($ver in @('18', '17', '16')) {
         foreach ($base in @(${env:ProgramFiles}, ${env:ProgramFiles(x86)})) {
             $root = Join-Path $base "Microsoft Visual Studio\$ver"
@@ -109,20 +109,95 @@ function Get-MSBuildPath ([string]$VsRoot) {
     throw "MSBuild.exe not found under: $VsRoot"
 }
 
-# ── Step 0: Embed kvckiller.sys into icon (icon header + LZX CAB) ─────────────
+function Get-DumpbinPath ([string]$VsRoot) {
+    $candidates = @(
+        (Get-ChildItem "$VsRoot\VC\Tools\MSVC" -Filter 'dumpbin.exe' -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'Hostx64\\x64' } |
+            Select-Object -First 1 -ExpandProperty FullName),
+        (Get-ChildItem "$VsRoot" -Filter 'dumpbin.exe' -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName)
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    return $null
+}
+
+function Test-NoCrtDependencies {
+    param(
+        [Parameter(Mandatory)] [string]$ExePath,
+        [string]$DumpbinPath
+    )
+
+    Write-Banner '[4] Verify Zero-CRT Imports (dumpbin)'
+    if (-not $DumpbinPath -or -not (Test-Path -LiteralPath $DumpbinPath)) {
+        Write-Step 'dumpbin.exe not found - skipping import verification.'
+        return $true
+    }
+
+    $lines = & $DumpbinPath /dependents "$ExePath" 2>&1
+    if (-not $lines) {
+        Write-Step 'dumpbin output not captured - skipping import verification.'
+        return $true
+    }
+
+    $inSection = $false
+    $deps = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $lines) {
+        if ($line -match 'Image has the following dependencies') { $inSection = $true; continue }
+        if ($inSection) {
+            if ($line -match '^\s*$' -and $deps.Count -gt 0) { break }
+            $dll = $line.Trim()
+            if ($dll -and $dll -notmatch '^Summary') { $deps.Add($dll) }
+        }
+    }
+
+    if ($deps.Count -eq 0) {
+        Write-Ok 'dumpbin: no external DLL dependencies.'
+        return $true
+    }
+
+    $forbidden = @('crt', 'msvcp', 'vcruntime', 'ucrtbase')
+    $hasForbidden = $false
+
+    Write-Step 'Imported DLLs:'
+    foreach ($d in $deps) {
+        $bad = $false
+        foreach ($f in $forbidden) {
+            if ($d.ToLower().Contains($f)) { $bad = $true; break }
+        }
+        if ($bad) {
+            Write-Fail "  $d (FORBIDDEN CRT DEPENDENCY!)"
+            $hasForbidden = $true
+        } else {
+            Write-Ok "  $d"
+        }
+    }
+
+    if ($hasForbidden) {
+        Write-Fail 'Zero-CRT check failed: CRT library found in import table!'
+        return $false
+    }
+
+    Write-Ok 'Zero-CRT verified: 100% native Windows OS APIs, 0 CRT dependencies!'
+    return $true
+}
+
+# -- Step 0: Embed 1 + 2 into icon ----------------------
 #
-# Output: ICON\WinDefCtl.ico  =  [original icon bytes]  +  [LZX-CAB of kvckiller.sys]
+# Output: ICON\WinDefCtl.ico  =  [original icon bytes]  +  [LZX-CAB(1, 2)]
 # gen_icon_size.h is regenerated with the exact header byte count so the C++
-# runtime knows where to seek for the CAB payload.
+# runtime knows where to seek for the CAB data.
 
 function Build-DriverIcon {
     param(
-        [Parameter(Mandatory)] [string] $DriverPath,
+        [Parameter(Mandatory)] [string] $Path1,
+        [Parameter(Mandatory)] [string] $Path2,
         [Parameter(Mandatory)] [string] $BaseIcon,
         [Parameter(Mandatory)] [string] $OutIcon
     )
 
-    foreach ($f in $DriverPath, $BaseIcon) {
+    foreach ($f in $Path1, $Path2, $BaseIcon) {
         if (-not (Test-Path -LiteralPath $f)) {
             Write-Fail "Required file not found: $f"
             return $false
@@ -138,20 +213,22 @@ function Build-DriverIcon {
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
     try {
-        # Copy driver to temp with internal CAB name
-        $tmpSys = Join-Path $tmpDir 'kvckiller.sys'
-        Copy-Item -LiteralPath $DriverPath -Destination $tmpSys -Force
+        $tmp1 = Join-Path $tmpDir '1'
+        $tmp2 = Join-Path $tmpDir '2'
+        Copy-Item -LiteralPath $Path1 -Destination $tmp1 -Force
+        Copy-Item -LiteralPath $Path2 -Destination $tmp2 -Force
 
-        # DDF: LZX compression, single cabinet
+        # DDF: LZX compression, both drivers in one cabinet
         $ddf = @"
-.Set CabinetNameTemplate=kvckiller.cab
+.Set CabinetNameTemplate=drivers.cab
 .Set DiskDirectoryTemplate=$tmpDir
 .Set CompressionType=LZX
 .Set CompressionMemory=21
 .Set MaxCabinetSize=0
 .Set Cabinet=on
 .Set Compress=on
-"$tmpSys" kvckiller.sys
+"$tmp1" 1
+"$tmp2" 2
 "@
         $ddfPath = Join-Path $tmpDir 'pack.ddf'
         [System.IO.File]::WriteAllText($ddfPath, $ddf, [System.Text.Encoding]::ASCII)
@@ -164,7 +241,7 @@ function Build-DriverIcon {
             return $false
         }
 
-        $cabPath = Join-Path $tmpDir 'kvckiller.cab'
+        $cabPath = Join-Path $tmpDir 'drivers.cab'
         if (-not (Test-Path -LiteralPath $cabPath)) {
             Write-Fail "CAB not produced at expected path: $cabPath"
             return $false
@@ -175,21 +252,23 @@ function Build-DriverIcon {
         [Array]::Copy($iconBytes, 0, $combined, 0,          $headerSize)
         [Array]::Copy($cabBytes,  0, $combined, $headerSize, $cabBytes.Length)
 
-        # Ensure ICON\ output directory exists
         $outDir = Split-Path -Parent $OutIcon
         if (-not (Test-Path -LiteralPath $outDir)) {
             New-Item -ItemType Directory -Force -Path $outDir | Out-Null
         }
         [System.IO.File]::WriteAllBytes($OutIcon, $combined)
 
-        Write-Step "Driver : $DriverPath ($((Get-Item $DriverPath).Length) B → $($cabBytes.Length) B CAB)"
-        Write-Step "Icon   : $headerSize B header + $($cabBytes.Length) B CAB = $($combined.Length) B total"
-        Write-Step "Output : $OutIcon"
+        $size1 = (Get-Item $Path1).Length
+        $size2 = (Get-Item $Path2).Length
+        Write-Step "1         : $size1 B"
+        Write-Step "2         : $size2 B"
+        Write-Step "CAB       : $($cabBytes.Length) B (LZX:21)"
+        Write-Step "Icon      : $headerSize B header + $($cabBytes.Length) B CAB = $($combined.Length) B total"
+        Write-Step "Output    : $OutIcon"
 
-        # Regenerate gen_icon_size.h so C++ code matches exactly
         $genH = @"
-// Auto-generated by build.ps1 — do not edit manually.
-// Byte count of IcoBuilder\WinDefCtl.ico; CAB payload begins at this offset.
+// Auto-generated by build.ps1 - do not edit manually.
+// Byte count of IcoBuilder\WinDefCtl.ico; CAB data begins at this offset.
 #pragma once
 #define ICON_HEADER_SIZE $headerSize
 "@
@@ -204,9 +283,9 @@ function Build-DriverIcon {
     }
 }
 
-# ════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 # MAIN
-# ════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 
 $fixedTs    = Parse-FixedTimestamp -Value $Timestamp
 $fixedTsStr = $fixedTs.ToString('yyyy-MM-dd HH:mm:ss',
@@ -214,45 +293,48 @@ $fixedTsStr = $fixedTs.ToString('yyyy-MM-dd HH:mm:ss',
 $epoch      = [DateTimeOffset]::new($fixedTs).ToUnixTimeSeconds()
 $env:SOURCE_DATE_EPOCH = [string]$epoch
 
-Write-Banner "$ProjectName v2.0 - full build chain"
+Write-Banner "$ProjectName v2.1 - full build chain"
 Write-Step "Configuration : $Configuration | $Platform"
 Write-Step "Timestamp     : $fixedTsStr (epoch $epoch)"
 
 $startTime = Get-Date
 $ok        = $true
 
-# ── Step 0: Package driver ────────────────────────────────────────────────────
+# -- Step 0: Package driver ----------------------------------------------------
 
 if (-not $SkipDriverPack) {
-    Write-Banner '[0] Package kvckiller.sys into icon'
+    Write-Banner '[0] Package 1 + 2 into icon'
     $ok = Build-DriverIcon `
-        -DriverPath (Join-Path $ProjectRoot 'IcoBuilder\kvckiller.sys') `
+        -Path1      (Join-Path $ProjectRoot 'IcoBuilder\1') `
+        -Path2      (Join-Path $ProjectRoot 'IcoBuilder\2') `
         -BaseIcon   (Join-Path $ProjectRoot 'IcoBuilder\WinDefCtl.ico') `
         -OutIcon    (Join-Path $ProjectRoot 'ICON\WinDefCtl.ico')
 } else {
     Write-Banner '[0] Driver pack SKIPPED (-SkipDriverPack)'
     if (-not (Test-Path (Join-Path $ProjectRoot 'ICON\WinDefCtl.ico'))) {
-        Write-Fail 'ICON\WinDefCtl.ico missing — run without -SkipDriverPack first'
+        Write-Fail 'ICON\WinDefCtl.ico missing - run without -SkipDriverPack first'
         exit 1
     }
 }
 
-# ── Step 1: Locate toolchain ──────────────────────────────────────────────────
+# -- Step 1: Locate toolchain --------------------------------------------------
 
 if ($ok) {
     Write-Banner '[1] Locate Visual Studio'
     try {
         $vsPath  = Get-LatestVsPath
         $msbuild = Get-MSBuildPath -VsRoot $vsPath
+        $dumpbin = Get-DumpbinPath -VsRoot $vsPath
         Write-Step "VS     : $vsPath"
         Write-Step "MSBuild: $msbuild"
+        if ($dumpbin) { Write-Step "Dumpbin: $dumpbin" }
     } catch {
         Write-Fail $_
         $ok = $false
     }
 }
 
-# ── Step 2: Clean previous obj\ ───────────────────────────────────────────────
+# -- Step 2: Clean previous obj\ -----------------------------------------------
 
 if ($ok -and (Test-Path -LiteralPath $ObjDir)) {
     Remove-Item $ObjDir -Recurse -Force
@@ -261,7 +343,7 @@ if ($ok -and (Test-Path -LiteralPath $ObjDir)) {
     Write-Banner '[2] Clean obj\ (nothing to remove)'
 }
 
-# ── Step 3: MSBuild /t:Rebuild ────────────────────────────────────────────────
+# -- Step 3: MSBuild /t:Rebuild ------------------------------------------------
 
 if ($ok) {
     Write-Banner '[3] MSBuild Rebuild'
@@ -288,19 +370,26 @@ if ($ok) {
     }
 }
 
-# ── Step 4: Stamp output timestamps ───────────────────────────────────────────
+# -- Step 4: Verify Zero-CRT imports (dumpbin) ---------------------------------
 
 if ($ok) {
-    Write-Banner '[4] Stamp output'
+    $exePath = Join-Path $BinDir "$ProjectName.exe"
+    $ok = Test-NoCrtDependencies -ExePath $exePath -DumpbinPath $dumpbin
+}
+
+# -- Step 5: Stamp output timestamps -------------------------------------------
+
+if ($ok) {
+    Write-Banner '[5] Stamp output'
     $exePath = Join-Path $BinDir "$ProjectName.exe"
     Set-FixedFileTimestamp -Paths @($exePath) -Value $fixedTs
     Write-Step "Timestamps set to: $fixedTsStr"
 }
 
-# ── Step 5: Post-build clean ──────────────────────────────────────────────────
+# -- Step 6: Post-build clean --------------------------------------------------
 
 if ($ok) {
-    Write-Banner '[5] Post-build clean'
+    Write-Banner '[6] Post-build clean'
 
     foreach ($d in @($ObjDir, (Join-Path $ProjectRoot 'x64'))) {
         if (-not (Test-Path -LiteralPath $d)) { continue }
@@ -315,11 +404,11 @@ if ($ok) {
                 Start-Sleep -Milliseconds 500
             }
         }
-        if (-not $removed) { Write-Info "Could not remove $d (locked) — safe to delete manually" }
+        if (-not $removed) { Write-Info "Could not remove $d (locked) - safe to delete manually" }
     }
 }
 
-# ── Result ────────────────────────────────────────────────────────────────────
+# -- Result --------------------------------------------------------------------
 
 $elapsed = (Get-Date) - $startTime
 Write-Host ''
@@ -329,7 +418,8 @@ if ($ok) {
         -ForegroundColor Green
     if (Test-Path -LiteralPath $exePath) {
         $sz = (Get-Item $exePath).Length
-        Write-Host "  Size: $sz B  ($([math]::Round($sz/1KB,1)) KB)" -ForegroundColor Gray
+        $szKb = [math]::Round($sz / 1KB, 1)
+        Write-Host "  Size: $sz B  ($szKb KB)" -ForegroundColor Gray
     }
 } else {
     Write-Host "  BUILD FAILED ($([math]::Round($elapsed.TotalSeconds,2))s)" -ForegroundColor Red

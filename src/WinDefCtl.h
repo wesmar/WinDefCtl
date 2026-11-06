@@ -1,13 +1,11 @@
 #pragma once
 
 #include <windows.h>
+#include <ole2.h>
 #include <UIAutomation.h>
-#include <string>
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "oleaut32.lib")
-
-#define DEBUG_LOGGING_ENABLED 1
 
 // Automates Windows Security interface for Real-Time Protection and Tamper Protection
 // Uses UI Automation API with TOPMOST console window as visual shield

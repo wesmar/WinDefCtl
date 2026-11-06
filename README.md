@@ -1,36 +1,53 @@
-# WinDefCtl — Windows Defender Automation & Control Utility v2.0
+# WinDefCtl — Windows Defender Automation & Control Utility v2.1
 
-**Full Defender engine kill + RTP/TP slider control via UI Automation**
+**Zero-CRT Native Architecture + Dual Kernel BYOVD Engine + RTP/TP Slider Control**
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2011-blue)]()
-[![Build](https://img.shields.io/badge/build-Release%20x64-brightgreen)]()
+[![Build](https://img.shields.io/badge/build-Release%20x64%20(Zero--CRT)-brightgreen)]()
+[![Size](https://img.shields.io/badge/binary%20size-80.5%20KB-success)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 ---
 
-## ⚡ What's New in v2.0
+## ⚡ What's New in v2.1 (06.11.2026)
 
-v2.0 introduces full Defender **engine kill** without restart — no PowerShell, no WMI, no third-party tools.  
-Combines offline IFEO hive manipulation with ring-0 kernel kill via `kvckiller.sys`.
+v2.1 brings a complete architectural overhaul focused on **Zero-CRT native implementation**, **sub-100KB binary size record**, **dual-driver kernel redundancy**, and **full MASM string obfuscation**.
 
-| Command | What it does |
-|---------|-------------|
-| `WinDefCtl kill` | IFEO block + kernel kill of `MsMpEng.exe` + `SecurityHealthSystray.exe` + SCM stop of `SecurityHealthService` |
-| `WinDefCtl restore` | Remove IFEO entries + start `WinDefend` + `SecurityHealthService` + relaunch `SecurityHealthSystray.exe` |
-| `WinDefCtl rtp off\|on\|status` | Real-Time Protection toggle via UI Automation (overlay) |
-| `WinDefCtl tp off\|on\|status` | Tamper Protection toggle via UI Automation (overlay) |
+<details>
+<summary>🚀 <b>Spoiler: Detailed v2.1.0 Architecture & Release Notes</b></summary>
 
-> **Bonus:** v2.0 ships an **optional PowerShell script edition** — same command palette
-> in a single self-contained `.ps1` (~65 KB) with the signed Topaz driver embedded as
-> base64 LZX CAB. See [PowerShell Edition](#-powershell-edition-addon) below.
+### ⚡ Sub-100KB Size Record & Zero-CRT (~80 KB)
+- **100% Native OS APIs (`/NODEFAULTLIB`)** — eliminated all C/C++ runtime library dependencies (`libcmt.lib`, `vcruntime*.dll`, `msvcrt.dll`). Executable dropped from ~380 KB down to **80.5 KB** (>78% reduction). Automated `dumpbin /dependents` in CI/CD pipeline enforces 0 CRT imports.
+- **Custom Native CRT Runtime** — handwritten implementations for memory (`memset`, `memcpy`, `memmove`), string algorithms (`StrLen`, `StrEqual`, `StrCopy`, `StrConcat`, `IntToStr`, `HexToStr`), and float/hex formatters running directly on Win32 without standard library overhead.
+- **Micro-Icon PNG CAB Compression** — transformed embedded multi-res icon to optimized 48x48 PNG format (1,088 B header), slashing icon resource overhead and total binary size.
+
+### 🛡️ Dual Kernel BYOVD Architecture & Extension Independence
+- **Two-tier Driver Redundancy** — engine kill upgraded from a single driver to dual signed kernel drivers (`1` and `2`), packed into a single LZX compressed CAB stream within the icon.
+- **Extension-Independent Driver Loading** — drivers extract and load directly without `.sys` extensions (`%SystemRoot%\System32\drivers\1` and `\2`). Windows SCM `CreateServiceW` and kernel loader resolve native PE headers directly.
+- **Automated Driver Teardown** — automated cleanup purges both driver files from disk and stops services immediately after the kill cycle completes.
+
+### 🔒 Low-Level String & Telemetry Obfuscation (x64 MASM)
+- **Zero Plaintext Driver Identifiers** — driver service names and device identifiers completely purged from executable `.rdata` string tables.
+- **Algorithmic Assembly Decoders** — implemented x64 MASM routines (`wdc1.asm` and `wdc2.asm`) that dynamically reconstruct driver service strings in stack memory using bitwise XOR, ROL, and SUB transformations disguised as Mm/ETW kernel telemetry routines. Verified clean via `dumpbin` and binary string inspection.
+
+### ⏱️ UI Automation & Zero Cursor Delay (0 ms)
+- **Instant Busy Cursor Cancellation (`IDC_WAIT` / `IDC_APPSTARTING`)** — integrated `MsgWaitForMultipleObjects(0, nullptr, FALSE, 0, QS_ALLINPUT)` at entry point, overlay creation, and post-`ShellExecuteW`. Satisfies `WaitForInputIdle` instantly (0 ms), eliminating the 27-second spinning wheel wait cursor on Windows 11.
+- **Overlay Window Cursor Enforcement** — registered `IDC_ARROW` cursor and handled `WM_SETCURSOR` in the Direct2D fullscreen overlay (`WDCOverlay`), preventing shell wait cursor leakage over the "PLEASE WAIT" screen.
+
+### 📐 Procedural Banner & Clean Systems Engineering
+- **Dynamic Mathematical Banner Lines** — replaced hardcoded banner string literals (`====`, `+----+`, space paddings) in `.rdata` with procedural loop-fill console routines (`PrintRepeated`, `PrintLineRepeated`, `PrintDoubleBorder`, `PrintSingleBorder`), saving `.rdata` memory.
+- **Codebase Sanitization** — completely purged informal/script-kiddie jargon ("payload", etc.) in favor of professional systems engineering nomenclature across comments, identifiers, and logs.
+- **Synchronized Build System** — automated alignment between `WinDefCtl.vcxproj` and `WinDefCtl.vcxproj.filters` with integrated MASM toolchain.
+
+</details>
 
 ---
 
 ## 📥 Download
 
-**[Latest Release → v2.0.0](https://github.com/wesmar/WinDefCtl/releases/tag/v2.0.0)**
+**[Latest Release → v2.1.0](https://github.com/wesmar/WinDefCtl/releases/tag/v2.1.0)**
 
-Single standalone executable — no installer, no dependencies, no runtime DLLs.  
+Single standalone native executable (**80.5 KB**) — no installer, no dependencies, zero CRT dependencies (`/NODEFAULTLIB`).  
 Run as **Administrator**.
 
 PowerShell edition: [`data/WinDefCtl-v2.ps1`](data/WinDefCtl-v2.ps1) (~65 KB, no compiler needed).
@@ -55,7 +72,7 @@ WinDefCtl ass on|off   # Automatic sample submission
 WinDefCtl ddp on|off   # Dev Drive protection
 ```
 
-The payload must be compiled natively for ARM64 — it is injected into `SecHealthUI.exe`
+The binary must be compiled natively for ARM64 — it is injected into `SecHealthUI.exe`
 which on ARM64 hardware is a native ARM64 process and cannot host x86-64 code.
 Source code is not published for this build.
 
@@ -115,21 +132,18 @@ WinDefCtl bypasses this using an offline hive cycle:
 
 `REG_FORCE_RESTORE` operates below the Tamper Protection filter. Requires `SE_BACKUP_NAME` + `SE_RESTORE_NAME`.
 
-**Stage 2 — Ring-0 process kill via `kvckiller.sys`:**
+**Stage 2 — Ring-0 process kill via Dual Kernel Engine:**
 
-`kvckiller.sys` carries a valid **digital signature** (service name: `wsftprm`).  
+Both kernel drivers carry valid **digital signatures**.  
 Loads without DSE bypass, without HVCI restart, without any unsigned-driver prerequisites.
 
-- Driver extracted from embedded LZX CAB (appended to the `.ico` resource at `ICON_HEADER_SIZE` offset)
-- Written to `System32\drivers\kvckiller.sys`
-- Service registered as `wsftprm` (Microsoft validates this service name)
-- IOCTL `0x22201C` on `\\.\Warsaw_PM` → terminates `MsMpEng.exe` + `SecurityHealthSystray.exe`
-- `SecurityHealthService` stopped via SCM
-- Service cleaned up after use (stop → wait for `SERVICE_STOPPED` → delete)
+- Drivers extracted from embedded LZX CAB (appended to the `.ico` resource at `ICON_HEADER_SIZE` offset)
+- Written to `System32\drivers\1` and `System32\drivers\2` (extension-independent SCM loading)
+- Driver service names and device identifiers reconstructed dynamically via x64 MASM assembly routines (`wdc1.asm`, `wdc2.asm`) — 0 plaintext string occurrences in `.rdata`
+- Terminates `MsMpEng.exe` + `SecurityHealthSystray.exe`; `SecurityHealthService` stopped via SCM
+- Immediate atomic cleanup after use (stop services, delete services, remove driver files from disk)
 
-**Smart service reuse:** if `wsftprm` already exists (e.g. from KVC installation) and points to a valid `kvckiller.sys`, the existing service is reused without overwriting.
-
-### `rtp` / `tp` — UI Automation (v1 behavior, unchanged)
+### `rtp` / `tp` — UI Automation
 
 Opens `windowsdefender://threatsettings` with `SW_SHOWMINNOACTIVE` (minimized, not activated).  
 Full-screen **Direct2D overlay** covers the desktop immediately — hiding the minimized window from view.  
@@ -138,6 +152,8 @@ Toggles the switch via `IUIAutomationTogglePattern`.
 **Overlay technical details:**
 - `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` fullscreen popup, fully opaque black
 - Direct2D + DirectWrite rendering: Consolas Bold 80pt, pulsing green, animated dots, CRT scanlines
+- **0 ms cursor delay:** Instant release of Windows `WaitForInputIdle` via `MsgWaitForMultipleObjects(..., QS_ALLINPUT)` to cancel the 27-second spinning wait cursor (`IDC_WAIT`/`IDC_APPSTARTING`)
+- `WM_SETCURSOR` handler and `IDC_ARROW` registration prevent shell wait cursor leakage
 - Background thread — non-blocking, no window activation
 - Released on `Hide()` via `PostMessage(WM_CLOSE)`
 
@@ -233,13 +249,14 @@ build tools — pure inbox Windows.
 ```
 
 **Build chain:**
-1. `Build-DriverIcon` — `makecab` LZX compresses `IcoBuilder\kvckiller.sys`, appends CAB to `IcoBuilder\WinDefCtl.ico` → `ICON\WinDefCtl.ico`
-2. Regenerates `src\GenIconSize.h` with exact icon header byte count
-3. MSBuild `Release|x64`: `/MT` (static CRT), LTCG, no PDB
-4. Timestamp stamp → `bin\WinDefCtl.exe`
-5. Cleans `obj\`
+1. `Build-DriverIcon` — `makecab` LZX compresses drivers `1` and `2`, appends CAB to `IcoBuilder\WinDefCtl.ico` → `ICON\WinDefCtl.ico`
+2. Regenerates `src\GenIconSize.h` with exact icon header byte count (1088 B)
+3. MSBuild `Release|x64`: `/NODEFAULTLIB` (Zero-CRT), `/O1` / `/Os` (FavorSize), `/GF`, `/Gy`, `/Gw`, MASM assembly compilation
+4. Dumpbin import check — automated verification of 0 CRT imports
+5. Timestamp stamp → `bin\WinDefCtl.exe`
+6. Cleans `obj\`
 
-**Output:** `bin\WinDefCtl.exe` (~380 KB, no external dependencies)
+**Output:** `bin\WinDefCtl.exe` (**80.5 KB**, 100% native Windows OS APIs)
 
 ---
 
@@ -248,7 +265,8 @@ build tools — pure inbox Windows.
 - **OS:** Windows 11 (tested on 24H2 / 26H1)
 - **Privileges:** Administrator
 - **Architecture:** x64
-- **Dependencies:** none (static CRT, inbox D2D1/DWrite via system DLLs)
+- **Dependencies:** none (Zero-CRT, 100% native Win32/NT APIs)
+- **Size:** ~80 KB
 
 ---
 

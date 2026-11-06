@@ -1,5 +1,5 @@
 #include "StealthUtils.h"
-#include <iostream>
+#include "Console.h"
 
 // ============================================================================
 // Registry Helpers
@@ -102,7 +102,7 @@ bool StealthUtils::RecoverUACIfNeeded() {
     DWORD encoded = 0;
     bool backupExisted = false;
     if (ReadRegistryDword(UAC_BACKUP_KEY, encoded, backupExisted) && backupExisted) {
-        std::wcout << L"  [RECOVERY] Found incomplete UAC backup, restoring...\n";
+        Console::PrintLine(L"  [RECOVERY] Found incomplete UAC backup, restoring...");
         return RestoreUAC();
     }
     return true;

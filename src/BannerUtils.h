@@ -1,14 +1,9 @@
 #pragma once
 
 #include <windows.h>
-#include <string_view>
 
 namespace BannerUtils {
     inline constexpr int WIDTH = 80;
-    inline constexpr std::wstring_view BORDER_DOUBLE = 
-        L"================================================================================";
-    inline constexpr std::wstring_view BORDER_SINGLE =
-        L"+------------------------------------------------------------------------------+";
     
     namespace Colors {
         inline constexpr WORD BLUE_BRIGHT = FOREGROUND_BLUE | FOREGROUND_INTENSITY;
@@ -18,11 +13,15 @@ namespace BannerUtils {
         inline constexpr WORD GRAY = FOREGROUND_INTENSITY;
     }
     
+    void PrintBorder(wchar_t fillChar, wchar_t edgeChar = 0, int width = WIDTH) noexcept;
+    void PrintDoubleBorder(int width = WIDTH) noexcept;
+    void PrintSingleBorder(int width = WIDTH) noexcept;
+    
     void ShowBanner() noexcept;
     void ShowUsage() noexcept;
     
-    void PrintCentered(std::wstring_view text, HANDLE hConsole, WORD color) noexcept;
-    void PrintBoxLine(std::wstring_view text, HANDLE hConsole, WORD borderColor, WORD textColor) noexcept;
+    void PrintCentered(const wchar_t* text, HANDLE hConsole = nullptr, WORD color = Colors::WHITE_BRIGHT) noexcept;
+    void PrintBoxLine(const wchar_t* text, HANDLE hConsole = nullptr, WORD borderColor = Colors::BLUE_BRIGHT, WORD textColor = Colors::WHITE_BRIGHT) noexcept;
     void PrintSectionHeader(const wchar_t* title) noexcept;
     void PrintCommandLine(const wchar_t* command, const wchar_t* description) noexcept;
     void PrintFooter() noexcept;
