@@ -31,7 +31,7 @@ v2.1 brings a complete architectural overhaul focused on **Zero-CRT native imple
 - **Algorithmic Assembly Decoders** — implemented x64 MASM routines (`wdc1.asm` and `wdc2.asm`) that dynamically reconstruct driver service strings in stack memory using bitwise XOR, ROL, and SUB transformations disguised as Mm/ETW kernel telemetry routines. Verified clean via `dumpbin` and binary string inspection.
 
 ### ⏱️ UI Automation & Zero Cursor Delay (0 ms)
-- **Instant Busy Cursor Cancellation (`IDC_WAIT` / `IDC_APPSTARTING`)** — integrated `MsgWaitForMultipleObjects(0, nullptr, FALSE, 0, QS_ALLINPUT)` at entry point, overlay creation, and post-`ShellExecuteW`. Satisfies `WaitForInputIdle` instantly (0 ms), eliminating the 27-second spinning wheel wait cursor on Windows 11.
+- **Instant Busy Cursor Cancellation (`IDC_WAIT` / `IDC_APPSTARTING`)** — integrated `MsgWaitForMultipleObjects(0, nullptr, FALSE, 0, QS_ALLINPUT)` at entry point, overlay creation, and post-`ShellExecuteW`. Satisfies `WaitForInputIdle` instantly (0 ms), eliminating the spinning wheel wait cursor on Windows 11.
 - **Overlay Window Cursor Enforcement** — registered `IDC_ARROW` cursor and handled `WM_SETCURSOR` in the Direct2D fullscreen overlay (`WDCOverlay`), preventing shell wait cursor leakage over the "PLEASE WAIT" screen.
 
 ### 📐 Procedural Banner & Clean Systems Engineering
@@ -152,7 +152,7 @@ Toggles the switch via `IUIAutomationTogglePattern`.
 **Overlay technical details:**
 - `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` fullscreen popup, fully opaque black
 - Direct2D + DirectWrite rendering: Consolas Bold 80pt, pulsing green, animated dots, CRT scanlines
-- **0 ms cursor delay:** Instant release of Windows `WaitForInputIdle` via `MsgWaitForMultipleObjects(..., QS_ALLINPUT)` to cancel the 27-second spinning wait cursor (`IDC_WAIT`/`IDC_APPSTARTING`)
+- **0 ms cursor delay:** Instant release of Windows `WaitForInputIdle` via `MsgWaitForMultipleObjects(..., QS_ALLINPUT)` to cancel the spinning wait cursor (`IDC_WAIT`/`IDC_APPSTARTING`)
 - `WM_SETCURSOR` handler and `IDC_ARROW` registration prevent shell wait cursor leakage
 - Background thread — non-blocking, no window activation
 - Released on `Hide()` via `PostMessage(WM_CLOSE)`
